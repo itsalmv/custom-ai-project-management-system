@@ -1,0 +1,488 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const record = $input.first().json;\n\nconst recordType = $input.first().json['Record Type'];\nconst status = $input.first().json.Status\nconst toPartyType =$input.first().json['To party Type']\nconst fromPartyType = $input.first().json['From Party'];\n\n// Define notification triggers\nconst shouldNotify = \n  (recordType == 'VO' && status == 'Issued' && toPartyType == 'Client') ||\n  (recordType === 'Client Decision' && status === 'Published') ||\n  (recordType === 'Submission Log' && status === 'Responded' && fromPartyType === 'Vendor') ||\n  (recordType === 'Meeting Note' && status === 'Published');\n\nif (!shouldNotify) {\n  return {json: {skip: true, reason: 'No notification needed'}};\n}\n\nconst reference = $input.first().json.Reference;\nconst subject = $input.first().json.Subject;\nconst body =$input.first().json.Summary|| '';\nconst issueDate = $input.first().json['Issue Date'];\nconst toPartyId = $input.first().json['Email Contractor'];\nconst fromPartyId = $input.first().json['Last edited by'];\nconst projectId = $input.first().json.Reference.split('-')[0];\n\nconst recipientId = toPartyType === 'Client' ? toPartyId : fromPartyId;\n\nif (!recipientId || !projectId) {\n  return {json: {skip: true, reason: 'Missing required relations'}};\n}\n\nreturn {\n  json: {\n    recordId: record.id,\n    recordUrl: record.url,\n    recordType,\n    status,\n    reference,\n    subject,\n    body,\n    issueDate,\n    recipientId,\n    recipientType: toPartyType === 'Client' ? 'Client' : 'Vendor',\n    projectId,\n    notificationType: \n      recordType === 'VO' ? 'vo_issued' :\n      recordType === 'Client Decision' ? 'decision_published' :\n      recordType === 'Meeting Note' ? 'meeting_published' : 'other',\n    skip: false\n  }\n};"
+      },
+      "id": "35689905-0db5-4068-a8d3-0e4e1b7c3bd2",
+      "name": "Validate Notification Need",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.skip}}"
+            }
+          ]
+        }
+      },
+      "id": "4aef0ef4-f19e-4481-8237-527ea15f055c",
+      "name": "Should Notify?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -192,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const notificationData = $('Validate Notification Need').first().json;\nconst project = $('Get a database page').first().json;\nconst recipient = $('Validate Notification Need').first().json.recipientId;\n\nconst projectCode = $input.first().json.property_project_code;\nconst projectName = $input.first().json.property_project_name;\nconst resipientName = $('Notion Trigger').first().json['From Party (Vendors)']\n\n\nreturn {\n  json: {\n    ...notificationData,\n    projectCode,\n    projectName,\n    resipientName,\n    recipient\n  }\n};"
+      },
+      "id": "1a640251-19af-4742-b768-8a83bfb4174b",
+      "name": "Aggregate Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('Aggregate Data').first().json;\nconst contact = $input.first().json;\n\nconst contactEmail = $input.first().json.recipientId;\nconst contactName = $input.first().json.resipientName;\n\n// Generate acknowledgment token\nconst ackToken = Buffer.from(\n  JSON.stringify({\n    recordId: data.recordId,\n    recipientId: data.recipientId,\n    timestamp: Date.now()\n  })\n).toString('base64');\n\nconst ackUrl = \"https://n8n.al-dar.com/webhook-test/acknowledge?token=\"+ackToken;\n\n// Generate email based on notification type\nlet emailSubject, emailBody;\n\nswitch (data.notificationType) {\n  case 'vo_issued':\n    emailSubject = `Variation Order Issued: ${data.reference}`;\n    emailBody = `\n      <h2>Variation Order Issued</h2>\n      <p>A new Variation Order has been issued for your review and acknowledgment.</p>\n      <div style=\"background: #dbeafe; padding: 20px; border-left: 4px solid #2563eb; margin: 20px 0;\">\n        <h3>${data.reference}</h3>\n        <p><strong>Project:</strong> ${data.projectCode} - ${data.projectName}</p>\n        <p><strong>Subject:</strong> ${data.subject}</p>\n        <p><strong>Issue Date:</strong> ${data.issueDate || 'Today'}</p>\n      </div>\n      <div style=\"background: #fef3c7; padding: 15px; border-left: 4px solid #f59e0b; margin: 20px 0;\">\n        <strong>⚠️ Action Required</strong><br>\n        Please acknowledge receipt of this Variation Order within 7 days.\n      </div>\n      <p style=\"text-align: center; margin: 30px 0;\">\n        <a href=\"${ackUrl}\" style=\"display: inline-block; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px;\">Acknowledge Receipt</a>\n      </p>\n    `;\n    break;\n    \n  case 'decision_published':\n    emailSubject = `Decision Recorded: ${data.reference}`;\n    emailBody = `\n      <h2>Client Decision Recorded</h2>\n      <p>Your decision has been recorded in our project management system.</p>\n      <div style=\"background: #dbeafe; padding: 20px; border-left: 4px solid #2563eb; margin: 20px 0;\">\n        <h3>${data.reference}</h3>\n        <p><strong>Project:</strong> ${data.projectCode} - ${data.projectName}</p>\n        <p><strong>Decision:</strong> ${data.subject}</p>\n        <p><strong>Date:</strong> ${data.issueDate || 'Today'}</p>\n      </div>\n      <h3>Details:</h3>\n      <p>${data.body.substring(0, 300)}...</p>\n      <p style=\"text-align: center; margin: 30px 0;\">\n        <a href=\"${data.recordUrl}\" style=\"display: inline-block; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px;\">View Full Details</a>\n      </p>\n    `;\n    break;\n    \n  case 'submission_responded':\n    emailSubject = `Response to Submission: ${data.reference}`;\n    emailBody = `\n      <h2>Submission Response Ready</h2>\n      <p>We have reviewed your submission and our response is ready.</p>\n      <div style=\"background: #dbeafe; padding: 20px; border-left: 4px solid #2563eb; margin: 20px 0;\">\n        <h3>${data.reference}</h3>\n        <p><strong>Project:</strong> ${data.projectCode} - ${data.projectName}</p>\n        <p><strong>Original Subject:</strong> ${data.subject}</p>\n        <p><strong>Status:</strong> Responded</p>\n      </div>\n      <h3>Response Summary:</h3>\n      <p>${data.body.substring(0, 300)}...</p>\n      <p style=\"text-align: center; margin: 30px 0;\">\n        <a href=\"${ackUrl}\" style=\"display: inline-block; padding: 12px 24px; background: #10b981; color: white; text-decoration: none; border-radius: 6px;\">Acknowledge Receipt</a>\n      </p>\n    `;\n    break;\n    \n  case 'meeting_published':\n    emailSubject = `Meeting Minutes: ${data.subject}`;\n    emailBody = `\n      <h2>Meeting Minutes Available</h2>\n      <p>Minutes from our recent meeting are now available for your review.</p>\n      <div style=\"background: #dbeafe; padding: 20px; border-left: 4px solid #2563eb; margin: 20px 0;\">\n        <h3>${data.reference || data.subject}</h3>\n        <p><strong>Project:</strong> ${data.projectCode} - ${data.projectName}</p>\n        <p><strong>Meeting:</strong> ${data.subject}</p>\n      </div>\n      <p style=\"text-align: center; margin: 30px 0;\">\n        <a href=\"${data.recordUrl}\" style=\"display: inline-block; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px;\">View Minutes</a>\n      </p>\n    `;\n    break;\n    \n  default:\n    emailSubject = `Project Update: ${data.reference}`;\n    emailBody = `<p>A project update is available. Please check your project portal.</p>`;\n}\n\nconst fullEmailHtml = `\n<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }\n    .container { max-width: 600px; margin: 0 auto; padding: 20px; }\n    .header { background: #2563eb; color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }\n    .content { padding: 30px; background: #f9fafb; border: 1px solid #e5e7eb; border-top: none; }\n    .footer { padding: 20px; text-align: center; font-size: 12px; color: #666; background: #f3f4f6; border-radius: 0 0 8px 8px; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>True Build</h1>\n      <p style=\"margin: 10px 0 0 0; opacity: 0.9;\">Project Communication</p>\n    </div>\n    <div class=\"content\">\n      <p>Dear ${contactName},</p>\n      ${emailBody}\n      <p>If you have any questions, please don't hesitate to contact your project manager.</p>\n    </div>\n    <div class=\"footer\">\n      <p>True Build | Architecture & Project Management</p>\n      <p>This is an automated notification. Please do not reply directly to this email.</p>\n    </div>\n  </div>\n</body>\n</html>\n`;\n\nreturn {\n  json: {\n    ...data,\n    contactEmail,\n    contactName,\n    emailSubject,\n    emailHtml: fullEmailHtml,\n    ackToken,\n    ackUrl\n  }\n};"
+      },
+      "id": "e29f8a48-35d2-40d8-a86b-e45bc514d92a",
+      "name": "Prepare Email Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.notion.com/v1/comments",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"parent\": {\"page_id\": \"{{$('Prepare Email Content').first().json.recordId}}\"},\n  \"rich_text\": [\n    {\n      \"text\": {\n        \"content\": \"📧 Notification sent to {{$('Prepare Email Content').first().json.recipientName}} ({{$('Prepare Email Content').first().json.contactEmail}}) on {{new Date().toISOString().split('T')[0]}}\"\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "3a97ed57-f00f-407e-b826-5a9ee6f19026",
+      "name": "Log Notification in Notion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1152,
+        -48
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "path": "acknowledge",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e4f0323e-783a-4de2-aebf-e6b53a95c505",
+      "name": "Acknowledgment Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -640,
+        256
+      ],
+      "webhookId": "client-acknowledgment"
+    },
+    {
+      "parameters": {
+        "jsCode": "const query = $input.first().json.query;\nconst token = query.token;\n\nif (!token) {\n  return {json: {error: true, message: 'Invalid acknowledgment link'}};\n}\n\ntry {\n  const decoded = JSON.parse(Buffer.from(token, 'base64').toString());\n  \n  return {\n    json: {\n      error: false,\n      recordId: decoded.recordId,\n      recipientId: decoded.recipientId,\n      timestamp: new Date().toISOString()\n    }\n  };\n} catch (error) {\n  return {json: {error: true, message: 'Invalid or expired token'}};\n}"
+      },
+      "id": "0818122e-3092-4510-ae6b-0212337409af",
+      "name": "Parse Acknowledgment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.error}}"
+            }
+          ]
+        }
+      },
+      "id": "bcc9d7c0-118b-4701-b387-95708e97fafb",
+      "name": "Valid Acknowledgment?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -192,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f3f4f6; }\n    .container { text-align: center; padding: 40px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }\n    .success { color: #10b981; font-size: 48px; margin-bottom: 20px; }\n    h1 { color: #1f2937; }\n    p { color: #6b7280; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"success\">✓</div>\n    <h1>Thank You!</h1>\n    <p>Your acknowledgment has been recorded.</p>\n    <p>You may now close this window.</p>\n  </div>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "1ef698f3-9e90-474c-b485-04f9e7e0c392",
+      "name": "Show Success Page",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        464,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "event": "pagedUpdatedInDatabase",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8053-802a-c406b6ba5aab",
+          "mode": "list",
+          "cachedResultName": "Project Records ",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658053802ac406b6ba5aab"
+        }
+      },
+      "type": "n8n-nodes-base.notionTrigger",
+      "typeVersion": 1,
+      "position": [
+        -640,
+        -48
+      ],
+      "id": "26b70b28-a888-4e53-bcde-115ea53f99a7",
+      "name": "Notion Trigger",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2a092ecf-c465-80e0-a216-f60c23664dc1",
+          "mode": "list",
+          "cachedResultName": "Projects",
+          "cachedResultUrl": "https://www.notion.so/2a092ecfc46580e0a216f60c23664dc1"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Project Code|rich_text",
+              "condition": "equals",
+              "richTextValue": "={{ $json.projectId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        32,
+        -48
+      ],
+      "id": "57deb455-768a-4cb5-bd96-c3ff17788293",
+      "name": "Get a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $('Aggregate Data').item.json.recordId }}",
+          "mode": "id"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Issue Date|date",
+              "date": "2026-01-11T03:36:05"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "Issued"
+            },
+            {
+              "key": "Summary|rich_text",
+              "textContent": "={   \"parent\": {\"page_id\": \"{{$('Prepare Email Content').first().json.recordId}}\"},   \"rich_text\": [     {       \"text\": {         \"content\": \"📧 Notification sent to {{ $('Prepare Email Content').item.json.recipient }} ({{$('Prepare Email Content').first().json.contactEmail}}) on {{new Date().toISOString().split('T')[0]}}\"       }     }   ] }"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        928,
+        -48
+      ],
+      "id": "f17ea4e4-69f8-47e2-9f0a-2e51b98c8dda",
+      "name": "Update a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.recipient }}",
+        "subject": "={{ $json.emailSubject }}",
+        "message": "={{ $json.emailHtml }}\n{{ $json.ackUrl}}?token={{ $json.ackToken }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        704,
+        -48
+      ],
+      "id": "137729b4-aa74-4a29-b3eb-c048c2837c7a",
+      "name": "Send a message",
+      "webhookId": "2fe36900-d7be-459c-bc8c-71f5fad88547",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $json.recordId }}",
+          "mode": "id"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Acknowledged By|rich_text",
+              "textContent": "={{ $json.recipientId }}"
+            },
+            {
+              "key": "Acknowledgment Date|date",
+              "date": "={{ $json.timestamp.split('T')[0] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        128,
+        160
+      ],
+      "id": "07460b33-8c06-44ae-8eca-45da78614077",
+      "name": "Update a database page1",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Client Portal Notifications",
+        "height": 576,
+        "width": 2192,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -768,
+        -160
+      ],
+      "typeVersion": 1,
+      "id": "727ac785-5aae-4f7d-8146-e1c1d275209d",
+      "name": "Sticky Note"
+    }
+  ],
+  "connections": {
+    "Validate Notification Need": {
+      "main": [
+        [
+          {
+            "node": "Should Notify?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Notify?": {
+      "main": [
+        [
+          {
+            "node": "Get a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Data": {
+      "main": [
+        [
+          {
+            "node": "Prepare Email Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Email Content": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acknowledgment Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Acknowledgment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Acknowledgment": {
+      "main": [
+        [
+          {
+            "node": "Valid Acknowledgment?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Acknowledgment?": {
+      "main": [
+        [
+          {
+            "node": "Update a database page1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Show Success Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate Notification Need",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a database page": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a database page": {
+      "main": [
+        [
+          {
+            "node": "Log Notification in Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Update a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a database page1": {
+      "main": [
+        [
+          {
+            "node": "Show Success Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "089d9a927c0abf363ffe8a270a9573534e756390e996737e0bdd0a91a64f564e"
+  }
+}
