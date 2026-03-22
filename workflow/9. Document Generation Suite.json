@@ -1,0 +1,1766 @@
+{
+  "name": "9. Document Generation Suite",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "generate-document",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "535f9451-c65a-444a-a74e-ce15c55bb37c",
+      "name": "Webhook - Document Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -896,
+        512
+      ],
+      "webhookId": "generate-document"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.query\n\nconst validTypes = ['vo_register', 'action_summary', 'monthly_report', 'submission_log_register', 'dcn', 'si', 'vo'];\n\nif (!String(body.document_type) || !validTypes.includes(String(body.document_type))) {\n  return {\n    json: {\n      error: true,\n      message: 'Invalid document_type. Must be one of: ' + validTypes.join(', ')\n    }\n  };\n}\n\nif (body.document_type !== 'monthly_report' && !body.project_id) {\n  return {\n    json: {\n      error: true,\n      message: 'project_id is required for this document type'\n    }\n  };\n}\n\nreturn {\n  json: {\n    error: false,\n    documentType: body.document_type,\n    projectId: body.project_id || null,\n    filters: body.filters || {},\n    recipientEmail: body.recipient_email || null\n  }\n};"
+      },
+      "id": "c424bba9-d2e3-4c9b-8ce8-906c0bd6c59c",
+      "name": "Validate Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -576,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.error}}"
+            }
+          ]
+        }
+      },
+      "id": "97d01ad0-193e-41ab-bd2a-c2c8dd732452",
+      "name": "Is Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -352,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// -----------------------------\n// 1️⃣ Input data\n// -----------------------------\nconst projectData = $('Get many database pages1').first().json;\n\nconst projectCode = projectData.property_reference.split('-')[0];\nconst records = $('Get many database pages1').all();\n\n// -----------------------------\n// 2️⃣ Document type mapping\n// -----------------------------\nconst validTypes = ['dcn', 'vo', 'vo_register', 'si'];\nconst defaultTitles = {\n  'vo_register': 'Variation Order Register',\n  'vo': 'Variation Order',\n  'dcn': 'DCN',\n  'si': 'SI'\n};\n\nconst docTypeInput = $('Validate Request').first().json.documentType;\n\nif (!docTypeInput || !validTypes.includes(docTypeInput)) {\n  return { \n    json: { error: true, message: 'Invalid document_type. Must be one of: ' + validTypes.join(', ') } \n  };\n}\n\nconst documentTitle = defaultTitles[docTypeInput];\n\n// -----------------------------\n// 3️⃣ Utility: format date\n// -----------------------------\nfunction formatDate(dateStr) {\n  if (!dateStr) return '-';\n  const d = new Date(dateStr);\n  return d.toLocaleDateString();\n}\n\n// -----------------------------\n// 4️⃣ Generate table rows dynamically\n// -----------------------------\nfunction generateRows(records, type) {\n  if (!records || records.length === 0) {\n    return `<tr><td colspan=\"6\" style=\"text-align:center; padding:20px; color:#6b7280;\">No records found</td></tr>`;\n  }\n\n  return records.map(r => {\n    const docNo = r.json.property_reference;\n    const subject = r.json.property_subject || '-';\n    const issueDate = formatDate(\n      r.json.property_issue_date?.start ||\n      r.json.property_received_date?.start ||\n      r.json.jsonproperty_created_time\n    );\n    const status = r.json.property_status || '-';\n    const contractorEmail = r.json.property_email_contractor || '-';\n    const ackDate = formatDate(r.json.property_acknowledgment_date?.start || r.property_acknowledgment_date);\n    const dueDate = formatDate(r.json.property_required_by_date?.start || r.property_required_by_date);\n    \n    const statusColors = {\n      'Draft': '#9ca3af',\n      'Issued': '#3b82f6',\n      'Acknowledged': '#10b981',\n      'Closed': '#6b7280',\n      'Published': '#10b981',\n      'Open': '#f59e0b',\n      'Overdue': '#dc2626'\n    };\n    const statusColor = statusColors[status] || '#6b7280';\n\n    const commonCells = {\n      docNo: `<td>${docNo}</td>`,\n      subject: `<td>${subject}</td>`,\n      issueDate: `<td class=\"center\">${issueDate}</td>`,\n      status: `<td class=\"center\"><span style=\"background:${statusColor}; color:white; padding:4px 8px; border-radius:4px; font-size:11px;\">${status}</span></td>`,\n      ackDate: `<td class=\"center\">${ackDate}</td>`,\n      contractorEmail: `<td class=\"center\">${contractorEmail}</td>`,\n      dueDate: `<td class=\"center\">${dueDate}</td>`\n    };\n\n    switch(type) {\n      case 'vo_register':\n      case 'vo':\n        return `<tr>${commonCells.docNo}${commonCells.subject}${commonCells.issueDate}${commonCells.status}${commonCells.ackDate}${commonCells.contractorEmail}</tr>`;\n      case 'si':\n      case 'dcn':\n        return `<tr>${commonCells.docNo}${commonCells.subject}${commonCells.issueDate}${commonCells.status}${commonCells.contractorEmail}</tr>`;\n      default:\n        return '';\n    }\n  }).join('');\n}\n\n// -----------------------------\n// 5️⃣ Table headers dynamically\n// -----------------------------\nlet tableHeaders = '';\nswitch(docTypeInput) {\n  case 'vo_register':\n  case 'vo':\n    tableHeaders = `<tr>\n      <th>Reference</th>\n      <th>Subject</th>\n      <th class=\"center\">Issue Date</th>\n      <th class=\"center\">Status</th>\n      <th class=\"center\">Acknowledged</th>\n      <th class=\"center\">Contractor Email</th>\n    </tr>`;\n    break;\n  case 'si':\n  case 'dcn':\n    tableHeaders = `<tr>\n      <th>Doc No</th>\n      <th>Subject</th>\n      <th class=\"center\">Issue Date</th>\n      <th class=\"center\">Status</th>\n      <th class=\"center\">Contractor Email</th>\n    </tr>`;\n    break;\n}\n\n// -----------------------------\n// 6️⃣ Generate HTML\n// -----------------------------\nconst tableRows = generateRows(records, docTypeInput);\nconst impactSummary = $('Get many database pages1').first().json.property_description || '-';\n\nconst html = `\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>${documentTitle} - ${projectCode}</title>\n  <style>\n    body { font-family: Arial, sans-serif; font-size: 10pt; color: #1f2937; margin: 20px; }\n    .header { border-bottom: 3px solid #2563eb; padding-bottom: 15px; margin-bottom: 20px; }\n    .title { font-size: 20pt; font-weight: bold; color: #2563eb; margin:0; }\n    .subtitle { font-size: 12pt; color: #666; margin:5px 0; }\n    table { width: 100%; border-collapse: collapse; margin-top: 20px; }\n    thead { background: #f3f4f6; }\n    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }\n    th { font-weight: bold; border-bottom: 2px solid #2563eb; }\n    td.center, th.center { text-align:center; }\n    .summary { margin-top: 20px; padding: 15px; background:#f9fafb; border-left: 4px solid #2563eb; }\n    .footer { margin-top: 20px; font-size: 8pt; color:#666; border-top:1px solid #ddd; padding-top:5px; }\n  </style>\n</head>\n<body>\n\n  <div class=\"header\">\n    <div class=\"title\">${documentTitle}</div>\n    <div class=\"subtitle\">${projectCode}</div>\n    <div style=\"font-size:9pt; color:#999; margin-top:10px;\">Generated: ${new Date().toLocaleDateString()}</div>\n  </div>\n\n  <table>\n    <thead>${tableHeaders}</thead>\n    <tbody>${tableRows}</tbody>\n  </table>\n\n  <div class=\"summary\">\n    <strong>Summary:</strong> Total Records: ${records.length || 0}<br>\n    <strong>Details:</strong> ${impactSummary}\n  </div>\n\n  <div class=\"footer\">\n    ${documentTitle} | ${projectCode} | Page 1 of 1\n  </div>\n\n</body>\n</html>\n`;\n\n// -----------------------------\n// 7️⃣ Return JSON\n// -----------------------------\nreturn {\n  json: {\n    documentHtml: html,\n    projectCode,\n    documentType: docTypeInput,\n    documentTitle,\n    email: $('Validate Request').first().json.recipientEmail,\n    filename: `${projectCode}_${documentTitle.replace(/\\s+/g,'_')}_${new Date().toISOString().split('T')[0]}.pdf`\n  }\n};"
+      },
+      "id": "8beb7d2a-3dc3-4a8a-bdc8-07378d56dcc6",
+      "name": "Generate VO Register HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "name": "={{ $('Generate VO Register HTML').item.json.filename }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "=https://drive.google.com/drive/folders/1qnv58Mwmh4havmNF4bTdvt3HU6oBbfK0?dmr=1&ec=wgc-drive-globalnav-goto",
+          "mode": "url"
+        },
+        "options": {}
+      },
+      "id": "b1d2395c-fb87-4ec9-8bdc-5ecb8c963c04",
+      "name": "Upload PDF to Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        992,
+        688
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$('Validate Request').first().json.recipientEmail}}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "a3a374c8-ac66-41d3-a947-abeb2b208eb6",
+      "name": "Should Email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1216,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"success\": true, \"message\": \"Document generated successfully\", \"filename\": \"{{$('Generate VO Register HTML').first().json.filename}}\", \"url\": \"{{$('Upload PDF to Drive').first().json.webViewLink}}\"}",
+        "options": {}
+      },
+      "id": "71f40769-570f-471f-8d2c-b72485f8cad2",
+      "name": "Return Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1664,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"success\": false, \"error\": \"{{$('Validate Request').first().json.message}}\"}",
+        "options": {}
+      },
+      "id": "5965fdcc-8c0b-4d23-8a53-1df2ae4d1cf3",
+      "name": "Return Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -144,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8053-802a-c406b6ba5aab",
+          "mode": "list",
+          "cachedResultName": "Project Records ",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658053802ac406b6ba5aab"
+        },
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Record Type|select",
+              "condition": "equals",
+              "selectValue": "={{ $json.documentType.split('_')[0].toUpperCase() }}"
+            }
+          ]
+        },
+        "options": {
+          "sort": {
+            "sortValue": [
+              {
+                "key": "Issue Date|date",
+                "direction": "descending"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        96,
+        688
+      ],
+      "id": "da8d8586-6890-4d67-ace0-398c3cdbaa4b",
+      "name": "Get many database pages1",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Generate VO Register HTML').item.json.email }}",
+        "subject": "Document",
+        "message": "={{ $('Upload PDF to Drive').item.json.webViewLink }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1440,
+        688
+      ],
+      "id": "d7f4b810-1cca-4aa4-a427-6df2773c166b",
+      "name": "Send a message",
+      "webhookId": "4f37314d-9bf9-4894-b004-e0be69e96127",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "d5eb331c-dc1a-4324-bade-d3c78d0f9fe8",
+                    "leftValue": "={{ $json.documentType }}",
+                    "rightValue": "action_summary",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "43d3cd47-fb6a-426f-a848-83a90c0c32a3",
+                    "leftValue": "={{ $json.documentType }}",
+                    "rightValue": "monthly_report",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "e223dd54-1a67-4219-98a1-4e46c2960af8",
+                    "leftValue": "={{ $json.documentType }}",
+                    "rightValue": "submission_log_register",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "982a036c-0fd4-4b90-8076-c5dbca77d0de",
+                    "leftValue": "={{ $json.documentType }}",
+                    "rightValue": "=dcn",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "98aff6de-1676-493e-bac2-5198f07ef369",
+                    "leftValue": "={{ $json.documentType }}",
+                    "rightValue": "si",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "da8ca263-0c0c-4a56-bd71-d44ed6b55cb9",
+                    "leftValue": "={{ $json.documentType }}",
+                    "rightValue": "vo_register",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c4315bbc-42bf-446b-8ad3-cd811dc5b758",
+                    "leftValue": "={{ $json.documentType }}",
+                    "rightValue": "vo",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -128,
+        288
+      ],
+      "id": "e8ba41f1-740b-4bb4-bf93-82850e06630f",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "name": "={{ $json.filename }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "=https://drive.google.com/drive/folders/1qnv58Mwmh4havmNF4bTdvt3HU6oBbfK0?dmr=1&ec=wgc-drive-globalnav-goto",
+          "mode": "url"
+        },
+        "options": {}
+      },
+      "id": "909a67a9-da83-4d95-8e2e-91311fc2a612",
+      "name": "Upload PDF to Drive2",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2112,
+        208
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$('Validate Request').first().json.recipientEmail}}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "5a8273cb-877c-477a-a79f-6ff46d0c6d83",
+      "name": "Should Email?2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2336,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"success\": true, \"message\": \"Document generated successfully\", \"filename\": \"{{$('Generate VO Register HTML2').first().json.filename}}\", \"url\": \"{{$('Upload PDF to Drive2').first().json.webViewLink}}\"}",
+        "options": {}
+      },
+      "id": "ed3de38f-e84c-417c-abeb-8da3060bb99a",
+      "name": "Return Success Response2",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2784,
+        208
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2a092ecf-c465-80e0-a216-f60c23664dc1",
+          "mode": "list",
+          "cachedResultName": "Projects",
+          "cachedResultUrl": "https://www.notion.so/2a092ecfc46580e0a216f60c23664dc1"
+        },
+        "returnAll": true,
+        "simple": false,
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Project Code|rich_text",
+              "condition": "contains",
+              "richTextValue": "={{ $json.projectId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        96,
+        208
+      ],
+      "id": "5b6aa139-73c1-4b2c-9d37-03f72c9973a2",
+      "name": "Get many database pages4",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8053-802a-c406b6ba5aab",
+          "mode": "list",
+          "cachedResultName": "Project Records ",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658053802ac406b6ba5aab"
+        },
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Project|rich_text",
+              "condition": "equals",
+              "richTextValue": "={{ $('Switch').item.json.projectId }}"
+            }
+          ]
+        },
+        "options": {
+          "sort": {
+            "sortValue": [
+              {
+                "key": "Issue Date|date",
+                "direction": "descending"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        320,
+        208
+      ],
+      "id": "1c2bbbe4-2465-4083-a53f-864252886ab9",
+      "name": "Get many database pages5",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Code in JavaScript').item.json.email }}",
+        "subject": "Monthly Report",
+        "message": "={{ $('Upload PDF to Drive2').item.json.webViewLink }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2560,
+        128
+      ],
+      "id": "bdcc7f79-00c4-4a1f-9d0b-3a59610c9d44",
+      "name": "Send a message2",
+      "webhookId": "4f37314d-9bf9-4894-b004-e0be69e96127",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// -----------------------------\n// 1️⃣ Input data\n// -----------------------------\nconst records = $input.all();\n\n// -----------------------------\n// 2️⃣ Document title & project\n// -----------------------------\nconst projectCode = records[0].json.property_title.split('-')[0] || 'Project';\nconst documentTitle = 'Action Summary Report';\n\n// -----------------------------\n// 3️⃣ Utility functions\n// -----------------------------\nfunction formatDate(dateStr) {\n  if (!dateStr) return '-';\n  const d = new Date(dateStr);\n  return d.toLocaleDateString();\n}\n\n// Plain text formatting (no color/badge) for priority and status\nfunction formatPriority(priority) {\n  return priority || '-';\n}\n\nfunction formatStatus(status) {\n  return status || '-';\n}\n\n// -----------------------------\n// 4️⃣ Generate table rows\n// -----------------------------\nfunction generateRows(records) {\n  if (!records || records.length === 0) {\n    return `<tr><td colspan=\"9\" style=\"text-align:center; padding:20px; color:#6b7280;\">No actions found</td></tr>`;\n  }\n\n  return records.map(r => {\n    const title = r.json.property_title;\n    const type = r.json.name.split('-')[1]; \n    const priority = formatPriority(r.json.property_priority);\n    const status = formatStatus(r.json.property_status);\n    const dueDate = formatDate(r.json.property_due_date?.start);\n    const daysRemaining = r.json.property_days_until_due ?? '-';\n    const owner = r.json.property_owner || '-';\n    const lastEdited = r.json.property_last_edited_by || '-';\n    const link = r.url ? `<a href=\"${r.url}\" target=\"_blank\">View</a>` : '-';\n\n    return `<tr>\n      <td>${title}</td>\n      <td>${type}</td>\n      <td class=\"center\">${priority}</td>\n      <td class=\"center\">${status}</td>\n      <td class=\"center\">${dueDate}</td>\n      <td class=\"center\">${daysRemaining}</td>\n      <td>${owner}</td>\n      <td>${lastEdited}</td>\n      <td class=\"center\">${link}</td>\n    </tr>`;\n  }).join('');\n}\n\n// -----------------------------\n// 5️⃣ Table headers\n// -----------------------------\nconst tableHeaders = `<tr>\n  <th>Reference</th>\n  <th>Type</th>\n  <th class=\"center\">Priority</th>\n  <th class=\"center\">Status</th>\n  <th class=\"center\">Due Date</th>\n  <th class=\"center\">Days Remaining</th>\n  <th>Owner</th>\n  <th>Last Edited By</th>\n  <th class=\"center\">Link</th>\n</tr>`;\n\n// -----------------------------\n// 6️⃣ Generate HTML\n// -----------------------------\nconst tableRows = generateRows(records);\n\nconst html = `\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<title>${documentTitle} - ${projectCode}</title>\n<style>\n  /* General styles */\n  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #1f2937; margin: 30px; line-height: 1.5; }\n  a { color: #2563eb; text-decoration: none; }\n\n  /* Header */\n  .header { border-bottom: 4px solid #2563eb; padding-bottom: 15px; margin-bottom: 25px; }\n  .title { font-size: 22pt; font-weight: bold; color: #2563eb; margin:0; }\n  .subtitle { font-size: 13pt; color: #4b5563; margin:5px 0; }\n  .generated { font-size: 9pt; color:#9ca3af; margin-top:5px; }\n\n  /* Table styling */\n  table { width: 100%; border-collapse: collapse; margin-top: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }\n  thead { background: #e0e7ff; }\n  th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #d1d5db; }\n  th { font-weight: 600; color: #1e3a8a; border-bottom: 3px solid #2563eb; }\n  td.center, th.center { text-align:center; }\n\n  /* Row hover */\n  tbody tr:hover { background: #f9fafb; }\n\n  /* Summary box */\n  .summary { margin-top: 25px; padding: 15px 20px; background:#f3f4f6; border-left: 5px solid #2563eb; font-weight: 500; }\n\n  /* Footer */\n  .footer { margin-top: 30px; font-size: 9pt; color:#6b7280; border-top:1px solid #d1d5db; padding-top:8px; text-align: center; }\n</style>\n</head>\n<body>\n\n<div class=\"header\">\n  <div class=\"title\">${documentTitle}</div>\n  <div class=\"subtitle\">${projectCode}</div>\n  <div class=\"generated\">Generated: ${new Date().toLocaleDateString()}</div>\n</div>\n\n<table>\n  <thead>${tableHeaders}</thead>\n  <tbody>${tableRows}</tbody>\n</table>\n\n<div class=\"summary\">\n  <strong>Summary:</strong> Total Actions: ${records.length || 0}\n</div>\n\n<div class=\"footer\">\n  ${documentTitle} | ${projectCode} | Page 1 of 1\n</div>\n\n</body>\n</html>\n`;\n\n// -----------------------------\n// 7️⃣ Return JSON\n// -----------------------------\nreturn {\n  json: {\n    documentHtml: html,\n    projectCode,\n    documentType: 'action_summary',\n    documentTitle,\n    email: $('Validate Request').first().json.recipientEmail,\n    filename: `${projectCode}_${documentTitle.replace(/\\s+/g,'_')}_${new Date().toISOString().split('T')[0]}.pdf`\n  }\n};"
+      },
+      "id": "4c143e7f-e498-46e6-bc09-c1c5c157d098",
+      "name": "Generate VO Register HTML3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "name": "={{ $json.filename }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "=https://drive.google.com/drive/folders/1qnv58Mwmh4havmNF4bTdvt3HU6oBbfK0?dmr=1&ec=wgc-drive-globalnav-goto",
+          "mode": "url"
+        },
+        "options": {}
+      },
+      "id": "c30ce88d-f7b7-4fda-bd5d-18f65fa1b4f1",
+      "name": "Upload PDF to Drive3",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        992,
+        -96
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$('Validate Request').first().json.recipientEmail}}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "5614cc87-dd96-432f-acd4-e0a9aa3ceb97",
+      "name": "Should Email?3",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1216,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"success\": true, \"message\": \"Document generated successfully\", \"filename\": \"{{$('Generate VO Register HTML3').first().json.filename}}\", \"url\": \"{{$('Upload PDF to Drive3').first().json.webViewLink}}\"}",
+        "options": {}
+      },
+      "id": "6ed8a938-2b33-4c2a-8abb-10b2b0251433",
+      "name": "Return Success Response3",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1664,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8082-bc35-e6f0a24dbeea",
+          "mode": "list",
+          "cachedResultName": "Task & Actions",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658082bc35e6f0a24dbeea"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Title|title",
+              "condition": "contains",
+              "titleValue": "={{ $json.projectId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        96,
+        -96
+      ],
+      "id": "6185ac6a-060e-43c1-b6cf-8233da5eda0f",
+      "name": "Get many database pages6",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://v2018.api2pdf.com/chrome/pdf/html",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n\"Filename\" : $json.filename,\n\"Html\" :$json.documentHtml,\n\n} }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "2dcaec5a-3b76-4983-91dc-d9f4fe77fee7",
+      "name": "Convert to PDF3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        544,
+        -80
+      ],
+      "credentials": {
+        "serviceNowBasicApi": {
+          "id": "HbRZpoZdKHcst8mc",
+          "name": "ServiceNow Basic Auth account"
+        },
+        "httpBasicAuth": {
+          "id": "pFkVopes2P3ISXYu",
+          "name": "Unnamed credential"
+        },
+        "httpHeaderAuth": {
+          "id": "2xIlvCWvX633Igga",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Generate VO Register HTML3').item.json.email }}",
+        "subject": "Action Summary Report",
+        "message": "={{ $('Upload PDF to Drive3').item.json.webViewLink }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1440,
+        -112
+      ],
+      "id": "ee4793b0-782d-474b-86b1-82dd74d4dc2f",
+      "name": "Send a message3",
+      "webhookId": "4f37314d-9bf9-4894-b004-e0be69e96127",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8082-bc35-e6f0a24dbeea",
+          "mode": "list",
+          "cachedResultName": "Task & Actions",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658082bc35e6f0a24dbeea"
+        },
+        "returnAll": true,
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Title|title",
+              "condition": "contains",
+              "titleValue": "={{ $('Switch').item.json.projectId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        544,
+        208
+      ],
+      "id": "5737824e-af68-4be2-9647-89b19ab342ef",
+      "name": "Get many database pages8",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e492ecf-c465-80d5-8e21-c4ab0830bffc",
+          "mode": "list",
+          "cachedResultName": "Client Dicisions",
+          "cachedResultUrl": "https://www.notion.so/2e492ecfc46580d58e21c4ab0830bffc"
+        },
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Reference|title",
+              "condition": "contains",
+              "titleValue": "={{ $('Is Valid?').item.json.projectId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        992,
+        208
+      ],
+      "id": "2b220d2d-12e0-42f8-9c17-38dc917e01b8",
+      "name": "Get many database pages9",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// =========================\n// INPUTS FROM N8N\n// =========================\nlet proj = $('Get many database pages4').all();\nlet projRec = $('Get many database pages5').all();\nlet projActions = $('Remove Duplicates').all();\nlet projDicision = $('Remove Duplicates1').all();\n\n// =========================\n// HELPERS\n// =========================\nconst getText = (arr) =>\n  arr && arr.length ? arr.map(t => t.plain_text).join('') : 'N/A';\n\nconst isThisMonth = (dateStr) => {\n  if (!dateStr) return false;\n  const d = new Date(dateStr);\n  const now = new Date();\n  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();\n};\n\n// =========================\n// PROJECT DETAILS\n// =========================\nconst project = proj[0].json;\n\nconst projectDetails = {\n  name: getText(project.properties[\"Project Name\"].title),\n  code: getText(project.properties[\"Project Code\"].rich_text),\n  health: project.properties.Health.select?.name || 'N/A',\n  status: project.properties.Status.select?.name || 'N/A',\n  phase: project.properties[\"Project Phase\"].select?.name || 'N/A',\n  startDate: project.properties[\"Start Date \"].date?.start || 'N/A',\n  targetCompletion: project.properties[\"Target Completion\"].date?.start || 'N/A',\n  internalLead: getText(project.properties[\"Internal Lead Name\"].rich_text)\n};\n\n// =========================\n// RECORDS SUMMARY\n// =========================\nconst recordsByType = {};\nprojRec.map(r => r.json)\n  .filter(r => isThisMonth(r.property_created_time))\n  .forEach(r => {\n    recordsByType[r.property_record_type] =\n      (recordsByType[r.property_record_type] || 0) + 1;\n  });\n\n// =========================\n// ACTIONS SUMMARY\n// =========================\nconst actions = projActions.map(a => a.json);\n\nconst openedActions = actions.filter(a => isThisMonth(a.property_created_time)).length;\nconst closedActions = actions.filter(a => a.property_status === 'Closed').length;\nconst openActions = actions.filter(a => a.property_status !== 'Closed').length;\n\n// =========================\n// VENDOR PERFORMANCE\n// =========================\nconst vendorMap = {};\nactions.forEach(a => {\n  if (a.property_support_party_vendors) {\n    vendorMap[a.property_support_party_vendors] =\n      (vendorMap[a.property_support_party_vendors] || 0) + 1;\n  }\n});\n\n// =========================\n// DECISIONS\n// =========================\nconst decisionsThisMonth = projDicision\n  .map(d => d.json)\n  .filter(d => isThisMonth(d.property_date?.start));\n\n// =========================\n// HTML BUILD\n// =========================\nconst html = `\n<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"UTF-8\" />\n  <style>\n    body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; }\n    h1, h2, h3 { color: #1f4e79; }\n    .section { margin-bottom: 28px; }\n    .box { background: #f4f6f8; padding: 15px; border-left: 5px solid #1f4e79; }\n    table { width: 100%; border-collapse: collapse; margin-top: 10px; }\n    th, td { border: 1px solid #ddd; padding: 8px; }\n    th { background: #f0f0f0; text-align: left; }\n  </style>\n</head>\n\n<body>\n\n<h1>Monthly Project Report</h1>\n<h3>${projectDetails.name} (${projectDetails.code})</h3>\n\n<div class=\"section\">\n  <h2>1. Executive Summary</h2>\n  <div class=\"box\">\n    <p>\n      The project remains in <strong>${projectDetails.health}</strong> health and is currently\n      in the <strong>${projectDetails.phase}</strong> phase. Progress during the month\n      has remained stable with actions advancing as planned.\n    </p>\n  </div>\n</div>\n\n<div class=\"section\">\n  <h2>2. Project Overview</h2>\n  <table>\n    <tr><th>Status</th><td>${projectDetails.status}</td></tr>\n    <tr><th>Location</th><td>${projectDetails.location}</td></tr>\n    <tr><th>Start Date</th><td>${projectDetails.startDate}</td></tr>\n    <tr><th>Target Completion</th><td>${projectDetails.targetCompletion}</td></tr>\n    <tr><th>Internal Lead</th><td>${projectDetails.internalLead}</td></tr>\n  </table>\n</div>\n\n<div class=\"section\">\n  <h2>3. Activity Overview</h2>\n\n  <h3>Records Issued / Received (This Month)</h3>\n  <ul>\n    ${\n      Object.keys(recordsByType).length\n        ? Object.entries(recordsByType)\n            .map(([k, v]) => `<li><strong>${k}</strong>: ${v}</li>`)\n            .join('')\n        : '<li>No records issued this month</li>'\n    }\n  </ul>\n\n  <h3>Actions Summary</h3>\n  <ul>\n    <li>Opened this month: <strong>${openedActions}</strong></li>\n    <li>Closed to date: <strong>${closedActions}</strong></li>\n    <li>Currently open: <strong>${openActions}</strong></li>\n  </ul>\n</div>\n\n<div class=\"section\">\n  <h2>4. Issues & Risks</h2>\n  <p>\n    No critical issues were identified during this reporting period.\n    Ongoing monitoring continues for schedule adherence and vendor coordination.\n  </p>\n</div>\n\n<div class=\"section\">\n  <h2>5. Vendor Performance Summary</h2>\n  <ul>\n    ${\n      Object.keys(vendorMap).length\n        ? Object.entries(vendorMap)\n            .map(([k, v]) => `<li>${k}: ${v} active actions</li>`)\n            .join('')\n        : '<li>No vendor activity recorded this month</li>'\n    }\n  </ul>\n</div>\n\n<div class=\"section\">\n  <h2>6. Key Decisions & Milestones</h2>\n  <ul>\n    ${\n      decisionsThisMonth.length\n        ? decisionsThisMonth.map(d =>\n            `<li><strong>${d.property_subject}</strong> – Decision by ${d.property_dicision_maker} on ${d.property_date.start}</li>`\n          ).join('')\n        : '<li>No key decisions recorded this month</li>'\n    }\n  </ul>\n</div>\n\n<div class=\"section\">\n  <h2>7. Next Month Outlook</h2>\n  <p>\n    Focus will remain on closing outstanding actions, progressing issued records,\n    and maintaining alignment with all stakeholders to ensure timely delivery.\n  </p>\n</div>\n\n</body>\n</html>\n`;\nconst filename = projectDetails.code+\" report\"\n// =========================\n// RETURN FOR N8N\n// =========================\nreturn [{ json: { html, filename,\n                    email: $('Validate Request').first().json.recipientEmail,\n\n                } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        208
+      ],
+      "id": "4cddab80-eeec-49e1-9b55-fd0cb7572ce6",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        768,
+        208
+      ],
+      "id": "97a97d16-e012-4d73-9e47-1e1cde4fb076",
+      "name": "Remove Duplicates"
+    },
+    {
+      "parameters": {
+        "compare": "allFieldsExcept",
+        "fieldsToExclude": "property_due_date.start",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        208
+      ],
+      "id": "958b4745-3808-429b-a860-b2f543ef2cbb",
+      "name": "Remove Duplicates1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// -----------------------------\n// 1️⃣ Input data\n// -----------------------------\nconst projectData = $('Get many database pages3').first().json;\n\nconst projectCode = projectData.property_reference.split('-')[0];\nconst records = $('Get many database pages3').all();\n\n// -----------------------------\n// 2️⃣ Document type mapping\n// -----------------------------\nconst docTypeInput = 'submission_log'; // fixed for submission log\nconst documentTitle = 'Submission Log';\n\n// -----------------------------\n// 3️⃣ Utility: format date\n// -----------------------------\nfunction formatDate(dateStr) {\n  if (!dateStr) return '-';\n  const d = new Date(dateStr);\n  return d.toLocaleDateString();\n}\n\n// -----------------------------\n// 4️⃣ Generate table rows dynamically\n// -----------------------------\nfunction generateRows(records) {\n  if (!records || records.length === 0) {\n    return `<tr><td colspan=\"6\" style=\"text-align:center; padding:20px; color:#6b7280;\">No records found</td></tr>`;\n  }\n\n  return records.map(r => {\n    const docNo = r.json.property_reference;\n    const subject = r.json.property_subject || '-';\n    const issueDate = formatDate(\n      r.json.property_issue_date?.start ||\n      r.json.property_received_date?.start ||\n      r.json.jsonproperty_created_time\n    );\n    const status = r.json.property_status || '-';\n    const contractorEmail = r.json.property_email_contractor || '-';\n    const ackDate = formatDate(r.json.property_acknowledgment_date?.start || r.property_acknowledgment_date);\n    const dueDate = formatDate(r.json.property_required_by_date?.start || r.property_required_by_date);\n    \n    const statusColors = {\n      'Draft': '#9ca3af',\n      'Issued': '#3b82f6',\n      'Acknowledged': '#10b981',\n      'Closed': '#6b7280',\n      'Published': '#10b981',\n      'Open': '#f59e0b',\n      'Overdue': '#dc2626'\n    };\n    const statusColor = statusColors[status] || '#6b7280';\n\n    return `<tr>\n      <td>${docNo}</td>\n      <td>${subject}</td>\n      <td class=\"center\">${issueDate}</td>\n      <td class=\"center\"><span style=\"background:${statusColor}; color:white; padding:4px 8px; border-radius:4px; font-size:11px;\">${status}</span></td>\n      <td class=\"center\">${ackDate}</td>\n      <td class=\"center\">${contractorEmail}</td>\n    </tr>`;\n  }).join('');\n}\n\n// -----------------------------\n// 5️⃣ Table headers\n// -----------------------------\nconst tableHeaders = `<tr>\n  <th>Submission Ref</th>\n  <th>Description / Subject</th>\n  <th class=\"center\">Date Submitted</th>\n  <th class=\"center\">Status</th>\n  <th class=\"center\">Acknowledged On</th>\n  <th class=\"center\">Submitted By / Email</th>\n</tr>`;\n\n// -----------------------------\n// 6️⃣ Generate HTML\n// -----------------------------\nconst tableRows = generateRows(records);\n\nconst html = `\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>${documentTitle} - ${projectCode}</title>\n  <style>\n    body { font-family: Arial, sans-serif; font-size: 10pt; color: #1f2937; margin: 20px; }\n    .header { border-bottom: 3px solid #2563eb; padding-bottom: 15px; margin-bottom: 20px; }\n    .title { font-size: 20pt; font-weight: bold; color: #2563eb; margin:0; }\n    .subtitle { font-size: 12pt; color: #666; margin:5px 0; }\n    table { width: 100%; border-collapse: collapse; margin-top: 20px; }\n    thead { background: #f3f4f6; }\n    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }\n    th { font-weight: bold; border-bottom: 2px solid #2563eb; }\n    td.center, th.center { text-align:center; }\n    .summary { margin-top: 20px; padding: 15px; background:#f9fafb; border-left: 4px solid #2563eb; }\n    .footer { margin-top: 20px; font-size: 8pt; color:#666; border-top:1px solid #ddd; padding-top:5px; }\n  </style>\n</head>\n<body>\n\n  <div class=\"header\">\n    <div class=\"title\">${documentTitle}</div>\n    <div class=\"subtitle\">${projectCode}</div>\n    <div style=\"font-size:9pt; color:#999; margin-top:10px;\">Generated: ${new Date().toLocaleDateString()}</div>\n  </div>\n\n  <table>\n    <thead>${tableHeaders}</thead>\n    <tbody>${tableRows}</tbody>\n  </table>\n\n  <div class=\"summary\">\n    <strong>Summary:</strong> Total Records: ${records.length || 0}\n  </div>\n\n  <div class=\"footer\">\n    ${documentTitle} | ${projectCode} | Page 1 of 1\n  </div>\n\n</body>\n</html>\n`;\n\n// -----------------------------\n// 7️⃣ Return JSON\n// -----------------------------\nreturn {\n  json: {\n    documentHtml: html,\n    projectCode,\n    documentType: docTypeInput,\n    documentTitle,\n        email: $('Validate Request').first().json.recipientEmail,\n\n    filename: `${projectCode}_${documentTitle.replace(/\\s+/g,'_')}_${new Date().toISOString().split('T')[0]}.pdf`\n  }\n};"
+      },
+      "id": "55b3864e-278f-4530-8f99-2f4272ecf8cd",
+      "name": "Generate VO Register HTML1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$('Validate Request').first().json.recipientEmail}}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "63724f0d-6a03-4334-95e4-020f9d1421f8",
+      "name": "Should Email?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1216,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"success\": true, \"message\": \"Document generated successfully\", \"filename\": \"{{$('Generate VO Register HTML1').first().json.filename}}\", \"url\": \"{{$('Upload PDF to Drive1').first().json.webViewLink}}\"}",
+        "options": {}
+      },
+      "id": "3101df54-4674-4f16-9bf9-de1e6bc5c4ca",
+      "name": "Return Success Response1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1664,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8053-802a-c406b6ba5aab",
+          "mode": "list",
+          "cachedResultName": "Project Records ",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658053802ac406b6ba5aab"
+        },
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Record Type|select",
+              "condition": "equals",
+              "selectValue": "Submission Log"
+            }
+          ]
+        },
+        "options": {
+          "sort": {
+            "sortValue": [
+              {
+                "key": "Issue Date|date",
+                "direction": "descending"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        96,
+        400
+      ],
+      "id": "fc16dc1d-a628-4a58-adf5-a57718ea0889",
+      "name": "Get many database pages3",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Generate VO Register HTML1').item.json.email }}",
+        "subject": "Submission Log Register",
+        "message": "={{ $('Upload PDF to Drive1').item.json.webViewLink }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1440,
+        400
+      ],
+      "id": "84de4edb-cd88-41d1-8b54-0321d2229436",
+      "name": "Send a message1",
+      "webhookId": "4f37314d-9bf9-4894-b004-e0be69e96127",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "={{ $json.filename }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "=https://drive.google.com/drive/folders/1qnv58Mwmh4havmNF4bTdvt3HU6oBbfK0?dmr=1&ec=wgc-drive-globalnav-goto",
+          "mode": "url"
+        },
+        "options": {}
+      },
+      "id": "8a3ea75e-705f-44f4-8ea4-55768f2d0f39",
+      "name": "Upload PDF to Drive1",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        992,
+        400
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://v2018.api2pdf.com/chrome/pdf/html",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n\"Filename\" : $json.filename,\n\"Html\" :$json.documentHtml,\n\n} }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "643facd6-7e15-42f4-84e2-f0c81e52a268",
+      "name": "Convert to PDF4",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        544,
+        688
+      ],
+      "credentials": {
+        "serviceNowBasicApi": {
+          "id": "HbRZpoZdKHcst8mc",
+          "name": "ServiceNow Basic Auth account"
+        },
+        "httpBasicAuth": {
+          "id": "pFkVopes2P3ISXYu",
+          "name": "Unnamed credential"
+        },
+        "httpHeaderAuth": {
+          "id": "2xIlvCWvX633Igga",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://v2018.api2pdf.com/chrome/pdf/html",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n\"Filename\" : $json.filename,\n\"Html\" :$json.documentHtml,\n\n} }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "d85161ea-ff19-4c0c-ab21-0b7dbd71bc96",
+      "name": "Convert to PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        544,
+        400
+      ],
+      "credentials": {
+        "serviceNowBasicApi": {
+          "id": "HbRZpoZdKHcst8mc",
+          "name": "ServiceNow Basic Auth account"
+        },
+        "httpBasicAuth": {
+          "id": "pFkVopes2P3ISXYu",
+          "name": "Unnamed credential"
+        },
+        "httpHeaderAuth": {
+          "id": "2xIlvCWvX633Igga",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://v2018.api2pdf.com/chrome/pdf/html",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n\"Filename\" : $json.filename+'.pdf',\n\"Html\" : $json.html,\n\n} }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "caf25cf2-053d-4aba-b9a7-a354ae285f61",
+      "name": "Convert to PDF5",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1664,
+        208
+      ],
+      "credentials": {
+        "serviceNowBasicApi": {
+          "id": "HbRZpoZdKHcst8mc",
+          "name": "ServiceNow Basic Auth account"
+        },
+        "httpBasicAuth": {
+          "id": "pFkVopes2P3ISXYu",
+          "name": "Unnamed credential"
+        },
+        "httpHeaderAuth": {
+          "id": "2xIlvCWvX633Igga",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.FileUrl }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        768,
+        688
+      ],
+      "id": "27b344f1-f2c1-4a9a-b6f5-2115b18b90e2",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.FileUrl }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        768,
+        400
+      ],
+      "id": "bfde4de9-6a0e-42cd-860c-3b0b421c4a6a",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.FileUrl }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1888,
+        208
+      ],
+      "id": "d4355aa3-c327-48c6-99fe-332de132c3dd",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.FileUrl }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        768,
+        -96
+      ],
+      "id": "c82a9266-760c-493e-a51e-9ec7a9946282",
+      "name": "HTTP Request3"
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "databaseId": {
+          "__rl": true,
+          "value": "2e792ecf-c465-8001-a20e-cc88aef44d74",
+          "mode": "list",
+          "cachedResultName": "Generate Documment",
+          "cachedResultUrl": "https://www.notion.so/2e792ecfc4658001a20ecc88aef44d74"
+        }
+      },
+      "type": "n8n-nodes-base.notionTrigger",
+      "typeVersion": 1,
+      "position": [
+        -880,
+        2112
+      ],
+      "id": "ecd37487-f284-4e96-806f-e17bbd4252aa",
+      "name": "Notion Trigger",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json['Generate PDF'] }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -592,
+        2160
+      ],
+      "id": "0fa2b7ba-3c03-4f5a-85d4-cd8fbc6c78c4",
+      "name": "HTTP Request4"
+    },
+    {
+      "parameters": {
+        "content": "## Document Generation Suite",
+        "height": 1200,
+        "width": 4096,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1136,
+        -192
+      ],
+      "typeVersion": 1,
+      "id": "5f9f7e66-db7e-4d55-a480-d1dfe064b069",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Document Request": {
+      "main": [
+        [
+          {
+            "node": "Validate Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Request": {
+      "main": [
+        [
+          {
+            "node": "Is Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid?": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate VO Register HTML": {
+      "main": [
+        [
+          {
+            "node": "Convert to PDF4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload PDF to Drive": {
+      "main": [
+        [
+          {
+            "node": "Should Email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Email?": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages1": {
+      "main": [
+        [
+          {
+            "node": "Generate VO Register HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Return Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages6",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get many database pages4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get many database pages3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get many database pages1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get many database pages1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get many database pages1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get many database pages1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload PDF to Drive2": {
+      "main": [
+        [
+          {
+            "node": "Should Email?2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Email?2": {
+      "main": [
+        [
+          {
+            "node": "Send a message2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Success Response2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages4": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages5": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message2": {
+      "main": [
+        [
+          {
+            "node": "Return Success Response2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate VO Register HTML3": {
+      "main": [
+        [
+          {
+            "node": "Convert to PDF3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload PDF to Drive3": {
+      "main": [
+        [
+          {
+            "node": "Should Email?3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Email?3": {
+      "main": [
+        [
+          {
+            "node": "Send a message3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Success Response3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages6": {
+      "main": [
+        [
+          {
+            "node": "Generate VO Register HTML3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to PDF3": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message3": {
+      "main": [
+        [
+          {
+            "node": "Return Success Response3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages8": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages9": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Convert to PDF5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate VO Register HTML1": {
+      "main": [
+        [
+          {
+            "node": "Convert to PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Email?1": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Success Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages3": {
+      "main": [
+        [
+          {
+            "node": "Generate VO Register HTML1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message1": {
+      "main": [
+        [
+          {
+            "node": "Return Success Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload PDF to Drive1": {
+      "main": [
+        [
+          {
+            "node": "Should Email?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to PDF4": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to PDF": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to PDF5": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Upload PDF to Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Upload PDF to Drive1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "Upload PDF to Drive2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request3": {
+      "main": [
+        [
+          {
+            "node": "Upload PDF to Drive3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request4": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "63b85834-b2fd-4465-b4a0-43fb65d84c0c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "089d9a927c0abf363ffe8a270a9573534e756390e996737e0bdd0a91a64f564e"
+  },
+  "id": "yNDg8CcLnwWkDDdX",
+  "tags": []
+}

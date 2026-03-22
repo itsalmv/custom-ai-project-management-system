@@ -1,0 +1,240 @@
+{
+  "name": "4. Action SLA Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "bc1a1e45-3f42-4752-9480-1bc8102bf3cf",
+      "name": "Schedule - Daily 6 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const actions = $input.all().map(i => i.json);\n\nconst categorized = {\n  overdue: [],\n  dueToday: [],\n  dueIn3Days: [],\n  dueThisWeek: [],\n  byOwner: {}\n};\n\nfor (const action of actions) {\n  const daysDiff = action.property_days_until_due;\n  if (daysDiff === undefined || daysDiff === null) continue; // Skip if missing\n\n  const ownerId = action.property_owner || 'Unassigned';\n  \n  const actionData = {\n    id: action.id,\n    url: action.url,\n    title: action.name || 'Untitled',\n    dueDate: action.property_due_date?.start || null,\n    priority: action.property_priority || 'P3 Normal',\n    status: action.property_status || 'Open',\n    projectName: action.property_projects_name || null,\n    dueInday : action.property_days_until_due\n  };\n  \n  // Categorize by days until due\n  if (daysDiff < 0) categorized.overdue.push(actionData);\n  else if (daysDiff === 0) categorized.dueToday.push(actionData);\n  else if (daysDiff <= 3) categorized.dueIn3Days.push(actionData);\n  else if (daysDiff <= 7) categorized.dueThisWeek.push(actionData);\n  \n  // Group by owner\n  const ownerGroup = categorized.byOwner[ownerId] ??= {\n    ownerName: ownerId,\n    actions: []\n  };\n  ownerGroup.actions.push(actionData);\n}\n\nreturn [{ json: categorized }];"
+      },
+      "id": "e2427716-da2a-4e4c-b862-333b1eff22c8",
+      "name": "Categorize Actions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        192,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const categorized = $input.first().json;\nconst results = [];\n\nfor (const [ownerId, ownerData] of Object.entries(categorized.byOwner)) {\n  // Skip unassigned\n  if (!ownerId || ownerId.toLowerCase() === 'unassigned') continue;\n\n  const ownerActions = ownerData.actions;\n\n  // Now filters will work because daysDiff exists\n  const overdue = ownerActions.filter(a => a.dueInday < 0);\n  const dueToday = ownerActions.filter(a => a.dueInday === 0);\n  const dueIn3Days = ownerActions.filter(a => a.dueInday > 0 && a.dueInday <= 3);\n  const dueThisWeek = ownerActions.filter(a => a.dueInday > 3 && a.dueInday <= 7);\n\n  if (ownerActions.length > 0) {\n    results.push({\n      json: {\n        ownerEmail: ownerId, // use ownerId as email\n        ownerName: ownerData.ownerName || ownerId,\n        overdue,\n        dueToday,\n        dueIn3Days,\n        dueThisWeek,\n        totalActions: ownerActions.length\n      }\n    });\n  }\n}\n\nreturn results;"
+      },
+      "id": "c8493f80-70fb-4667-9a72-3211028d36b6",
+      "name": "Split by Owner",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8082-bc35-e6f0a24dbeea",
+          "mode": "list",
+          "cachedResultName": "Task & Actions",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658082bc35e6f0a24dbeea"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Status|select",
+              "condition": "does_not_equal",
+              "selectValue": "Closed"
+            }
+          ]
+        },
+        "options": {
+          "sort": {
+            "sortValue": [
+              {
+                "key": "Days Until Due|formula",
+                "direction": "ascending"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -32,
+        -32
+      ],
+      "id": "c82635b1-98d4-45aa-b03f-3715c1e1fa85",
+      "name": "Get many database pages",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.ownerEmail }}",
+        "subject": "Task INFO",
+        "emailType": "text",
+        "message": "=Due Today: {{ $json.dueToday.length }}\n{{ $json.dueToday.length > 0 ? $json.dueToday.map((item, index) => `  - Reference: ${item.title}\\n  - Name: ${item.projectName}`).join('\\n') : '' }}\n\nDue In 3 Days: {{ $json.dueIn3Days.length }}\n{{ $json.dueIn3Days.length > 0 ? $json.dueIn3Days.map((item, index) => `  - Reference: ${item.title}\\n  - Name: ${item.projectName}`).join('\\n') : '' }}\n\nDue This Week: {{ $json.dueThisWeek.length }}\n{{ $json.dueThisWeek.length > 0 ? $json.dueThisWeek.map((item, index) => `  - Reference: ${item.title}\\n  - Name: ${item.projectName}`).join('\\n') : '' }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        768,
+        -32
+      ],
+      "id": "6b84376a-b06d-48b0-845a-25437386f384",
+      "name": "Send a message",
+      "webhookId": "a273ca1c-0687-4dcd-a612-4fb7aba9eedb",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.id }}",
+          "__regex": "^([0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12})"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Priority|select",
+              "selectValue": "={{ $json.property_days_until_due > 7 \n  ? (['P4 Low', 'P3 Normal', 'P2 High', 'P1 Critical'])[\n      ['P4 Low', 'P3 Normal', 'P2 High', 'P1 Critical'].indexOf($json.property_priority) + 1\n    ] || $json.property_priority\n  : $json.property_priority }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        224,
+        208
+      ],
+      "id": "5d1fa253-eab4-48ab-ad13-b0c33e8ff22e",
+      "name": "Update a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Action SLA Monitor\n",
+        "height": 544,
+        "width": 1328
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -304,
+        -144
+      ],
+      "typeVersion": 1,
+      "id": "5444b454-7486-4cf6-8164-5a8d1e732234",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule - Daily 6 AM": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Categorize Actions": {
+      "main": [
+        [
+          {
+            "node": "Split by Owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split by Owner": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages": {
+      "main": [
+        [
+          {
+            "node": "Categorize Actions",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "5101554b-1ef1-4ca7-b353-dbf44dbb5911",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "089d9a927c0abf363ffe8a270a9573534e756390e996737e0bdd0a91a64f564e"
+  },
+  "id": "SIs2BWoLuGJZjUpl",
+  "tags": []
+}

@@ -1,0 +1,388 @@
+{
+  "name": "7. Project Health Auto-Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "660f8d6a-a274-4cbc-8e83-d8d8834078c2",
+      "name": "Schedule - Daily 9 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1344,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const projects = $input.first().json.data;\n\n if (projects.length === 0) {\n   return [{ json: { skip: true } }];\n }\n\n// Split projects by health\nconst splitProjects = {\n  Green: [],\n  Amber: [],\n  Red: []\n};\n\nprojects.forEach(project => {\n  const health = project.property_health || 'Green';\n  \n  const projectData = {\n    projectId: project.id,\n    projectUrl: project.url,\n    projectCode: project.property_project_code,\n    projectName: project.property_project_name,\n    currentHealth: health,\n    internalLeadEmail: project.property_internal_lead_email,\n    internalLeadName: project.property_internal_lead_name\n  };\n  \n  if (splitProjects[health]) {\n    splitProjects[health].push(projectData);\n  } else {\n    // If health is something unexpected, put it in Red by default\n    splitProjects.Red.push(projectData);\n  }\n});\n\nreturn splitProjects;"
+      },
+      "id": "315a5ff4-45d6-4546-a7eb-8339c911ad6c",
+      "name": "Split Projects",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -784,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2a092ecf-c465-80e0-a216-f60c23664dc1",
+          "mode": "list",
+          "cachedResultName": "Projects",
+          "cachedResultUrl": "https://www.notion.so/2a092ecfc46580e0a216f60c23664dc1"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Status|select",
+              "condition": "equals",
+              "selectValue": "Active"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -1120,
+        64
+      ],
+      "id": "1ec458c3-d364-44c5-afd9-fedb9838b768",
+      "name": "Get many database pages",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        -976,
+        64
+      ],
+      "id": "45b82fe5-4362-4709-a64c-9525393d7c72",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $json.url }}",
+          "mode": "url"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Notes|rich_text",
+              "textContent": "Heath Stats: match the currect status."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        944,
+        176
+      ],
+      "id": "55c98641-e31d-4135-8a7c-fe6376219f9a",
+      "name": "Update a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.property_internal_lead_email }}",
+        "subject": "Health Stats",
+        "message": "=Require Adjustments for project = {{ $json.property_project_code }}\nSuggested health: {{ $json.suggested_health }}\n\nPage url: {{ $json.url }}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        976,
+        -192
+      ],
+      "id": "b41bafd7-8a01-4fac-b33f-6a35f459cbcb",
+      "name": "Send a message",
+      "webhookId": "fcc2d291-cdf2-49df-b861-6e0ea57fc569",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let records = $('Records').all();\nlet actions = $('Actions').all();\nlet projects = $('Get many database pages').all();\n\nlet type = ['SI', 'DCN', 'VO'];\n\n// --------------------\n// Group records by project code\n// --------------------\nlet recordsByProject = {};\nrecords.forEach(record => {\n  let code = record.json.property_reference?.split('-')[0];\n  if (!code) return;\n\n  if (!recordsByProject[code]) recordsByProject[code] = [];\n  recordsByProject[code].push(record);\n});\n\n// --------------------\n// Group actions by project code\n// --------------------\nlet actionsByProject = {};\nactions.forEach(action => {\n  let code = action.json.property_title?.split('-')[0];\n  if (!code) return;\n\n  if (!actionsByProject[code]) actionsByProject[code] = [];\n  actionsByProject[code].push(action);\n});\n\n// --------------------\n// Enrich projects with suggested health\n// --------------------\nlet enrichedProjects = projects.map(project => {\n  let projectCode = project.json.property_project_code;\n\n  let critical_actions = 0;\n  let aging_records = 0;\n  let blocked_actions = 0;\n  let overdue_rfis = 0;\n\n  // -------- Records --------\n  (recordsByProject[projectCode] || []).forEach(record => {\n    if (\n      (record.json.property_priority === 'P1 Critical' ||\n       record.json.property_priority === 'P2 High') &&\n      record.json.property_days_until_due < 0\n    ) {\n      critical_actions++;\n    }\n\n    if (\n      record.json.property_status === 'Issued' &&\n      record.json.property_acknowledgment_date == null &&\n      type.includes(record.json.property_record_type)\n    ) {\n      aging_records++;\n    }\n  });\n\n  // -------- Actions --------\n  (actionsByProject[projectCode] || []).forEach(action => {\n    let ref = action.json.property_title || '';\n\n    if (action.json.property_status === 'Blocked') {\n      blocked_actions++;\n    }\n\n    if (ref.includes('RFI') && action.json.property_days_until_due < 0) {\n      overdue_rfis++;\n    }\n  });\n\n  // -------- Score & Health --------\n  let score = 0;\n  if (critical_actions > 0) score += critical_actions * 10;\n  if (aging_records > 2) score += aging_records * 5;\n  if (blocked_actions > 0) score += blocked_actions * 7;\n  if (overdue_rfis > 0) score += overdue_rfis * 8;\n\n  let suggested_health;\n  if (score >= 30) suggested_health = \"Red\";\n  else if (score >= 15) suggested_health = \"Amber\";\n  else suggested_health = \"Green\";\n\n  // 🔹 Return original project + suggested health\n  return {\n    ...project.json,\n    suggested_health\n  };\n});\n\n// --------------------\n// Final Return (ALL projects only)\n// --------------------\nreturn enrichedProjects;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        32,
+        64
+      ],
+      "id": "8e0ad7b9-ca7b-4f69-9e91-64baf87d1ee4",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8053-802a-c406b6ba5aab",
+          "mode": "list",
+          "cachedResultName": "Project Records ",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658053802ac406b6ba5aab"
+        },
+        "returnAll": true,
+        "filterType": "manual",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -448,
+        64
+      ],
+      "id": "a2ccca09-3db9-48b3-ae51-e08d8e449550",
+      "name": "Records",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8082-bc35-e6f0a24dbeea",
+          "mode": "list",
+          "cachedResultName": "Task & Actions",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658082bc35e6f0a24dbeea"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -176,
+        64
+      ],
+      "id": "03bd120f-af4a-41a8-a6c9-05287ce974ce",
+      "name": "Actions",
+      "executeOnce": true,
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "42cc1f67-ea5f-4870-8929-fafca0335a19",
+              "leftValue": "={{ $json.property_health }}",
+              "rightValue": "={{ $json.suggested_health }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        464,
+        64
+      ],
+      "id": "7f81d87e-3b29-4ae4-9bd6-a96c2db32d7f",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "content": "## Project Health Auto-Monitor",
+        "height": 608,
+        "width": 2976,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1552,
+        -224
+      ],
+      "typeVersion": 1,
+      "id": "965d6b63-ad24-4714-b6c6-a0b42a7e2286",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule - Daily 9 AM": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Projects": {
+      "main": [
+        [
+          {
+            "node": "Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Split Projects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a database page": {
+      "main": [
+        []
+      ]
+    },
+    "Send a message": {
+      "main": [
+        []
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Records": {
+      "main": [
+        [
+          {
+            "node": "Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actions": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7bae983f-be2a-4b4c-a8b8-9ab548fecca7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "089d9a927c0abf363ffe8a270a9573534e756390e996737e0bdd0a91a64f564e"
+  },
+  "id": "iHggvc3xvb4cqFL5",
+  "tags": []
+}

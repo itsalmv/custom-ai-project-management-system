@@ -1,0 +1,466 @@
+{
+  "name": "11. Cross-Project Intelligence",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * 0"
+            }
+          ]
+        }
+      },
+      "id": "1e0f4931-8963-49fd-a395-1280c050eb01",
+      "name": "Schedule - Sunday 10 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        -880,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.skip}}"
+            }
+          ]
+        }
+      },
+      "id": "f6c7eaa5-ee6a-4163-9a39-0ce6d3ee5e7c",
+      "name": "Has RFIs?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -208,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Clean and parse JSON from text fields wrapped in ```\nreturn items.map(item => {\n    let text = item.json.text || \"\";\n\n    // Remove ``` or ```json code block wrappers\n    text = text.replace(/^```(json)?\\s*/, \"\").replace(/```$/, \"\").trim();\n\n    // Parse JSON\n    let parsed = {};\n    try {\n        parsed = JSON.parse(text);\n    } catch (err) {\n        console.error(\"JSON parse error:\", err);\n        parsed = null;\n    }\n\n    // Optional: Ensure reference IDs exist in code node\n    if (parsed && parsed.action_items) {\n        const referenceRegex = /\\b[A-Z]{3}-\\d{3}-DCN-\\d{3}\\b/;\n        parsed.action_items = parsed.action_items.map(a => {\n            const match = a.description.match(referenceRegex) || a.reference?.match(referenceRegex);\n            a.code = { reference_id: match ? match[0] : null };\n            return a;\n        });\n    }\n\n    return { json: parsed };\n});"
+      },
+      "id": "c8c46f74-8c67-4da5-8674-edb5557cd66a",
+      "name": "Parse RFI Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        368,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const vendors = $input.all();\nconst vendorsWithMultipleProjects = [];\n\nfor (const vendor of vendors) {\n  // Count projects based on property_related_projects length\n  const projectCount = vendor.json.property_related_projects?.length || 0;\n\n  if (projectCount >= 2) {\n    vendorsWithMultipleProjects.push({\n      json: {\n        vendorId: vendor.json.property_id,\n        vendorName: vendor.json.property_name || 'Unknown',\n        projectCount\n      }\n    });\n  }\n}\n\nreturn vendorsWithMultipleProjects.length > 0\n  ? vendorsWithMultipleProjects\n  : [{ json: { skip: true } }];"
+      },
+      "id": "b28043c9-4607-4e3b-a7b9-90d3ef80074d",
+      "name": "Filter Multi-Project Vendors",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        816,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const actions = $input.all();\n\nconst waitingReasons = {};\nconst blockedReasons = {};\n\nfor (const action of actions) {\n  const status = action.json.property_status;\n  const isOverdue = action.json.property_is_overdue;\n  const reason = action.json.property_priority || 'Not specified';\n  const project = action.json.property_projects_name || 'Unknown Project';\n\n  // Skip closed tasks\n  if (status === 'Closed') continue;\n\n  const key = `${project} | ${reason}`;\n\n  if (isOverdue) {\n    blockedReasons[key] = (blockedReasons[key] || 0) + 1;\n  } else {\n    waitingReasons[key] = (waitingReasons[key] || 0) + 1;\n  }\n}\n\nconst bottlenecks = [];\n\n// Waiting bottlenecks\nfor (const [key, count] of Object.entries(waitingReasons)) {\n  bottlenecks.push({\n    type: 'Waiting',\n    key,\n    count\n  });\n}\n\n// Blocked bottlenecks\nfor (const [key, count] of Object.entries(blockedReasons)) {\n  bottlenecks.push({\n    type: 'Blocked',\n    key,\n    count\n  });\n}\n\n// Sort descending by count\nreturn {\n  json: {\n    bottlenecks: bottlenecks.sort((a, b) => b.count - a.count)\n  }\n};"
+      },
+      "id": "5210c05b-f38a-4f2a-bbbc-4daf5bd7ac18",
+      "name": "Identify Bottlenecks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1264,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rfiAnalysis = $('Parse RFI Analysis').first().json;\nconst bottlenecks = $('Identify Bottlenecks').first().json;\n\nconst reportDate = new Date().toISOString().split('T')[0];\n\nfunction generateThemeSection(themes) {\n  if (!themes || themes.length === 0) {\n    return '<p><em>No significant patterns detected</em></p>';\n  }\n  \n  return themes.slice(0, 5).map(theme => `\n    <div style=\"background: white; padding: 15px; margin: 12px 0; border-left: 4px solid #2563eb;\">\n      <h4 style=\"margin: 0 0 8px 0; color: #2563eb;\">${theme.theme}</h4>\n      <p style=\"margin: 4px 0;\"><strong>Frequency:</strong> ${theme.count} RFIs</p>\n      <p style=\"margin: 4px 0;\"><strong>Suggested Action:</strong> ${theme.suggested_action}</p>\n    </div>\n  `).join('');\n}\n\nfunction generateBottleneckSection(bottlenecks) {\n  if (!bottlenecks.bottlenecks || bottlenecks.bottlenecks.length === 0) {\n    return '<p><em>No significant bottlenecks detected</em></p>';\n  }\n  \n  return bottlenecks.bottlenecks.map(bn => `\n    <div style=\"background: white; padding: 15px; margin: 12px 0; border-left: 4px solid #f59e0b;\">\n      <h4 style=\"margin: 0 0 8px 0; color: #f59e0b;\">${bn.type}: ${bn.key}</h4>\n      <p style=\"margin: 4px 0;\"><strong>Affected Actions:</strong> ${bn.count}</p>\n    </div>\n  `).join('');\n}\n\nconst emailHtml = `\n<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }\n    .container { max-width: 800px; margin: 0 auto; padding: 20px; }\n    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px; text-align: center; border-radius: 8px 8px 0 0; }\n    .content { padding: 30px; background: #f9fafb; }\n    .section { margin: 30px 0; }\n    .section-title { font-size: 20px; font-weight: bold; color: #1f2937; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #2563eb; }\n    .footer { padding: 20px; text-align: center; font-size: 12px; color: #666; background: #f3f4f6; border-radius: 0 0 8px 8px; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1 style=\"margin: 0 0 10px 0;\">📊 Weekly Intelligence Report</h1>\n      <p style=\"margin: 0; opacity: 0.9;\">${reportDate}</p>\n    </div>\n    \n    <div class=\"content\">\n      <div style=\"background: #dbeafe; padding: 20px; border-left: 4px solid #2563eb; margin-bottom: 30px;\">\n        <h3 style=\"margin: 0 0 10px 0;\">Executive Summary</h3>\n        <p style=\"margin: 0;\">Analysis of ${rfiAnalysis.totalRFIs || 0} RFIs and ${bottlenecks.bottlenecks?.length || 0} bottlenecks across all active projects in the last 90 days.</p>\n      </div>\n      \n      <div class=\"section\">\n        <div class=\"section-title\">🔍 Recurring RFI Themes</div>\n        ${generateThemeSection(rfiAnalysis.rfiThemes)}\n      </div>\n      \n      <div class=\"section\">\n        <div class=\"section-title\">⚠️ Process Bottlenecks</div>\n        ${generateBottleneckSection(bottlenecks)}\n      </div>\n      \n      <div style=\"background: #10b981; color: white; padding: 20px; border-radius: 8px; margin-top: 30px;\">\n        <h3 style=\"margin: 0 0 10px 0;\">✅ Recommended Actions</h3>\n        <ul style=\"margin: 0; padding-left: 20px;\">\n          <li>Review top RFI themes and implement preventive measures</li>\n          <li>Address recurring bottlenecks in workflow processes</li>\n          <li>Share findings with project teams in weekly meeting</li>\n        </ul>\n      </div>\n    </div>\n    \n    <div class=\"footer\">\n      <p>True Build System | Weekly Intelligence Report</p>\n      <p>This report is generated automatically every Sunday</p>\n    </div>\n  </div>\n</body>\n</html>\n`;\n\nreturn {\n  json: {\n    emailHtml,\n    reportDate,\n    totalRFIs: rfiAnalysis.totalRFIs || 0,\n    themeCount: rfiAnalysis.rfiThemes?.length || 0,\n    bottleneckCount: bottlenecks.bottlenecks?.length || 0\n  }\n};"
+      },
+      "id": "eb7c6d53-0506-4405-8cd3-3ed6ff4d7fe0",
+      "name": "Generate Intelligence Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8053-802a-c406b6ba5aab",
+          "mode": "list",
+          "cachedResultName": "Project Records ",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658053802ac406b6ba5aab"
+        },
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Record Type|select",
+              "condition": "equals",
+              "selectValue": "RFI"
+            },
+            {
+              "key": "Created time|created_time",
+              "condition": "past_month"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -656,
+        -144
+      ],
+      "id": "07bf45ba-84f2-4af0-be4d-bece1f46157a",
+      "name": "Get many database pages",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.subjects }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=     \"role\": \"user\",       \"content\": \"Categorize these RFI subjects into themes and identify patterns. Return JSON:\\n{\\n  \\\"themes\\\": [\\n    {\\n      \\\"theme\\\": \\\"Theme name\\\",\\n      \\\"count\\\": number,\\n      \\\"rfis\\\": [\\\"ref1\\\", \\\"ref2\\\"],\\n      \\\"suggested_action\\\": \\\"Proactive measure to prevent\\\"\\n    }\\n  ]\\n}\\n\\nRFI subjects:\\n{{$json.subjects.join('\\\\n')}}\\n\\nReturn ONLY valid JSON, no other text.\""
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        16,
+        -144
+      ],
+      "id": "2261c6a4-1c42-4432-8a62-f6ffab22478e",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        96,
+        80
+      ],
+      "id": "ad0b2987-3a65-460a-8d02-144ac1ef2c45",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "im0wRDMc1nxRopKR",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e092ecf-c465-80ae-9022-c3cf24f71223",
+          "mode": "list",
+          "cachedResultName": "Vendors",
+          "cachedResultUrl": "https://www.notion.so/2e092ecfc46580ae9022c3cf24f71223"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Status|select",
+              "condition": "equals",
+              "selectValue": "Active"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        592,
+        -144
+      ],
+      "id": "1001fbf4-0d57-48a9-b8e6-19dc777a9506",
+      "name": "Get many database pages1",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8082-bc35-e6f0a24dbeea",
+          "mode": "list",
+          "cachedResultName": "Task & Actions",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658082bc35e6f0a24dbeea"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Created time|created_time",
+              "condition": "past_month"
+            },
+            {
+              "key": "Status|select",
+              "condition": "does_not_equal",
+              "selectValue": "Closed"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        1040,
+        -144
+      ],
+      "id": "afd210b8-ad4d-487a-986a-0bd867b1f6d5",
+      "name": "Get many database pages2",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "iamumair244@gmail.com",
+        "subject": "Cross Intelligence Report",
+        "message": "={{ $json.emailHtml }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1712,
+        -144
+      ],
+      "id": "cebd5174-2c67-485d-8f6b-de90f4869d1a",
+      "name": "Send a message",
+      "webhookId": "e492a640-ce26-442f-adb9-0edc91b1bfec",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Cross-Project Intelligence",
+        "height": 576,
+        "width": 3008,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1088,
+        -288
+      ],
+      "typeVersion": 1,
+      "id": "57d8a9aa-eb9a-4d30-bbf7-ea79fe07ef1e",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rfis = $('Get many database pages').all() || [];\n\nif (rfis.length === 0) {\n  return [{json: {skip: true, subjects: []}}];\n}\n\nconst subjects = rfis.map(rfi => {\n  const reference = rfi.json.property_reference;\n  const subject = rfi.json.property_subject;\n  return `${reference}: ${subject}`;\n});\n\nreturn [{\n  json: {\n    skip: false,\n    subjects: subjects,\n    totalRFIs: rfis.length\n  }\n}];"
+      },
+      "id": "021b8469-7872-48a3-8093-e81010caaeb1",
+      "name": "Extract RFI Subjects",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -432,
+        -144
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule - Sunday 10 AM": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has RFIs?": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse RFI Analysis": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Identify Bottlenecks": {
+      "main": [
+        [
+          {
+            "node": "Generate Intelligence Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Intelligence Report": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages": {
+      "main": [
+        [
+          {
+            "node": "Extract RFI Subjects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Multi-Project Vendors": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Parse RFI Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages1": {
+      "main": [
+        [
+          {
+            "node": "Filter Multi-Project Vendors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages2": {
+      "main": [
+        [
+          {
+            "node": "Identify Bottlenecks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        []
+      ]
+    },
+    "Extract RFI Subjects": {
+      "main": [
+        [
+          {
+            "node": "Has RFIs?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "649ca3f1-762b-4727-bbb4-691924cbe3ca",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "089d9a927c0abf363ffe8a270a9573534e756390e996737e0bdd0a91a64f564e"
+  },
+  "id": "WZexyJXFDkm2u14q",
+  "tags": []
+}

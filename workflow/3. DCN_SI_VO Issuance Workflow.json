@@ -1,0 +1,444 @@
+{
+  "name": "3. DCN/SI/VO Issuance Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8053-802a-c406b6ba5aab",
+          "mode": "list",
+          "cachedResultName": "Project Records ",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658053802ac406b6ba5aab"
+        }
+      },
+      "id": "868171dc-a4b7-4243-8921-8e6258369788",
+      "name": "Trigger - Status Changed to Issued",
+      "type": "n8n-nodes-base.notionTrigger",
+      "typeVersion": 1,
+      "position": [
+        -624,
+        112
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const record = $input.first().json;\n\nconst recordType = String($input.first().json[\"Record Type\"][0]);\nconsole.log(recordType)\n\n// if (!['DCN', 'SI', 'VO'].includes(recordType)) {\n//   return {json: {skip: true, reason: 'Not a DCN/SI/VO record'}};\n// }\n\nconst reference = $input.first().json.Reference;\nconst subject = $input.first().json.Subject;\nconst body = $input.first().json.Summary || '';\nconst issueDate = $input.first().json[\"Issue Date\"];\nconst toPartyType = $input.first().json[\"To party Type\"];\nconst projectId = reference.split('-')[0];\n let contractorEMail = $input.first().json[\"Email Contractor\"]\nif (!contractorEMail || !projectId) {\n  return {json: {skip: true, reason: 'Missing required relations', email:contractorEMail, projectId}, };\n}\n\nreturn {\n  json: {\n    recordId: $input.first().json.id,\n    recordType,\n    reference,\n    subject,\n    body,\n    issueDate: issueDate || new Date().toISOString().split('T')[0],\n    toPartyType,\n    contractorEMail,\n    projectId,\n    skip: false\n  }\n};"
+      },
+      "id": "8e99f434-eb4a-4b34-aced-6c12c95b552a",
+      "name": "Validate Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const recordData = $('Validate Record').first().json;\nconst project = $('Get many database pages').all();\nconst recipient = $('Validate Record').first().json.contractorEMail;\n\nconst projectCode = $('Validate Record').first().json.projectId;\nconst projectName = $input.first().json.name;\n\nconst recipientContact = $('Validate Record').first().json.contractorEMail;\n\nreturn {\n  json: {\n    ...recordData,\n    projectCode,\n    projectName,\n    recipientContactId: recipientContact\n  }\n};"
+      },
+      "id": "4bf54e89-ece1-44bc-9b45-7f1e3e2fda17",
+      "name": "Aggregate Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\nconst pdfHtml = `\n<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    @page { size: A4; margin: 2cm; }\n    body { font-family: 'Arial', sans-serif; font-size: 11pt; line-height: 1.6; color: #000; }\n    .header { border-bottom: 3px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px; }\n    .company-name { font-size: 24pt; font-weight: bold; color: #2563eb; margin: 0; }\n    .doc-title { font-size: 18pt; font-weight: bold; margin: 30px 0 10px 0; }\n    .reference { font-size: 14pt; color: #666; margin: 0 0 20px 0; }\n    .info-table { width: 100%; border-collapse: collapse; margin: 20px 0; }\n    .info-table td { padding: 8px; border: 1px solid #ddd; }\n    .info-table td:first-child { background: #f3f4f6; font-weight: bold; width: 30%; }\n    .content { margin: 30px 0; }\n    .footer { position: fixed; bottom: 0; width: 100%; border-top: 1px solid #ddd; padding-top: 10px; font-size: 9pt; color: #666; }\n  </style>\n</head>\n<body>\n  <div class=\"header\">\n    <div class=\"company-name\">TRUE BUILD</div>\n    <div style=\"font-size: 10pt; color: #666;\">Architecture & Project Management</div>\n  </div>\n  \n  <div class=\"doc-title\">${$input.first().json.recordType === 'DCN' ? 'Design Change Notice' : $input.first().json.recordType === 'SI' ? 'Site Instruction' : 'Variation Order'}</div>\n  <div class=\"reference\">${$input.first().json.reference}</div>\n  \n  <table class=\"info-table\">\n    <tr>\n      <td>Project</td>\n      <td>${data.projectCode} - ${data.projectName}</td>\n    </tr>\n    <tr>\n      <td>To</td>\n      <td>${$input.first().json.contractorEMail}</td>\n    </tr>\n    <tr>\n      <td>Issue Date</td>\n      <td>${data.issueDate}</td>\n    </tr>\n    <tr>\n      <td>Subject</td>\n      <td><strong>${data.subject}</strong></td>\n    </tr>\n  </table>\n  \n  <div class=\"content\">\n    <h3>Details</h3>\n    <p>${$('Trigger - Status Changed to Issued').first().json.Subject}</p>\n        <p>${$('Trigger - Status Changed to Issued').first().json['Impact Summary']?$('Trigger - Status Changed to Issued').first().json['Impact Summary']:\"\"}</p>\n  </div>\n  \n  <div style=\"margin-top: 50px; padding: 20px; background: #fef3c7; border-left: 4px solid #f59e0b;\">\n    <strong>⚠️ Acknowledgment Required</strong><br>\n    This document requires acknowledgment within 7 days of receipt.\n  </div>\n  \n  <div class=\"footer\">\n    <p>Document Reference: ${data.reference} | Generated: ${new Date().toISOString().split('T')[0]} | Page 1 of 1</p>\n  </div>\n</body>\n</html>\n`;\n\nreturn {\n  json: {\n    ...data,\n    pdfHtml\n  }\n};"
+      },
+      "id": "b7de8cba-9f5e-4c31-b001-d38a19332a67",
+      "name": "Generate PDF HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://v2018.api2pdf.com/chrome/pdf/html",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n\"Filename\" : $json.reference+\".pdf\",\n\"Html\" : $json.pdfHtml,\n\n} }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "5085fe98-e262-4e64-a2ba-1a9f89f19d76",
+      "name": "Convert to PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        896,
+        96
+      ],
+      "credentials": {
+        "serviceNowBasicApi": {
+          "id": "HbRZpoZdKHcst8mc",
+          "name": "ServiceNow Basic Auth account"
+        },
+        "httpBasicAuth": {
+          "id": "pFkVopes2P3ISXYu",
+          "name": "Unnamed credential"
+        },
+        "httpHeaderAuth": {
+          "id": "2xIlvCWvX633Igga",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "={{ $('Generate PDF HTML').item.json.reference }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "1qnv58Mwmh4havmNF4bTdvt3HU6oBbfK0",
+          "mode": "list",
+          "cachedResultName": "True Build OS",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1qnv58Mwmh4havmNF4bTdvt3HU6oBbfK0"
+        },
+        "options": {}
+      },
+      "id": "62a83b07-b447-4f80-8b20-62c0e4076b41",
+      "name": "Upload PDF to Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1600,
+        48
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "58854d48-974b-4dbb-b332-f2180fda9395",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -192,
+        112
+      ],
+      "id": "7beebf7e-c474-4ade-af4b-13ee96a7906c",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2a092ecf-c465-80e0-a216-f60c23664dc1",
+          "mode": "list",
+          "cachedResultName": "Projects",
+          "cachedResultUrl": "https://www.notion.so/2a092ecfc46580e0a216f60c23664dc1"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Project Code|rich_text",
+              "condition": "equals",
+              "richTextValue": "={{ $json.projectId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        160,
+        96
+      ],
+      "id": "1cc8ee0a-646d-48e0-b849-7cf260634550",
+      "name": "Get many database pages",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $('Trigger - Status Changed to Issued').item.json.id }}",
+          "mode": "id"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Attachment Link|url",
+              "ignoreIfEmpty": true,
+              "urlValue": "https://drive.google.com/file/d/1piPyAjmAv0uOd5WH5aePeQ8uj4Gup7Sp/view"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        1856,
+        48
+      ],
+      "id": "edc42505-320b-4b2a-8742-7bce93fceb2a",
+      "name": "Update a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "iamumair244@gmail.com",
+        "subject": "=PDF requested: {{ $json.reference }}",
+        "emailType": "text",
+        "message": "=",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {}
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1632,
+        256
+      ],
+      "id": "7b318a19-6eda-4fb2-8d74-56c7ba310c74",
+      "name": "Send a message",
+      "webhookId": "0cda7e8e-8cd1-4c1c-9c7c-3f3ca66ea434",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.FileUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1104,
+        96
+      ],
+      "id": "755d61bf-30c7-442c-8d3d-7b916976e35b",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "content": "## 3. DCN/SI/VO Issuance Workflow",
+        "height": 480,
+        "width": 2928,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -784,
+        -32
+      ],
+      "typeVersion": 1,
+      "id": "5ce419f4-0893-4791-a3e9-7e975a2922ba",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Trigger - Status Changed to Issued": {
+      "main": [
+        [
+          {
+            "node": "Validate Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Record": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Data": {
+      "main": [
+        [
+          {
+            "node": "Generate PDF HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate PDF HTML": {
+      "main": [
+        [
+          {
+            "node": "Convert to PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to PDF": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload PDF to Drive": {
+      "main": [
+        [
+          {
+            "node": "Update a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Get many database pages": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        []
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Upload PDF to Drive",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "8b19bc5b-45b5-4412-96f2-038d4cf13053",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "089d9a927c0abf363ffe8a270a9573534e756390e996737e0bdd0a91a64f564e"
+  },
+  "id": "09RGQhgo1WJwaukT",
+  "tags": []
+}

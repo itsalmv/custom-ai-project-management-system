@@ -1,0 +1,505 @@
+{
+  "name": "2. RFI Response Tracker",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const rfi = $input.first().json;\nconst props = rfi.properties;\n\nconst reference = $input.first().json.Reference;\nconst subject = $input.first().json.Subject;\nconst receiveDate = $input.first().json['Last edited time'].split('T')[0];\nconst requiredByDate =\n  $input.first().json[' Required By Date']?.start\n    ? $input.first().json[' Required By Date'].start.split('T')[0]\n    : new Date(Date.now() + 5 * 24 * 60 * 60 * 1000)\n        .toISOString()\n        .split('T')[0];\nconst projectId = reference.split('-')[0]\n\nif (!projectId) {\n  return { json: { error: 'No project linked', skip: true } };\n}\n\nconst responseDueDate = requiredByDate || addBusinessDays(receiveDate, 5);\n\nfunction addBusinessDays(startDate, days) {\n  let current = new Date(startDate);\n  let added = 0;\n  while (added < days) {\n    current.setDate(current.getDate() + 1);\n    if (current.getDay() !== 0 && current.getDay() !== 6) added++;\n  }\n  return current.toISOString().split('T')[0];\n}\n\nreturn {\n  json: {\n    rfiId: rfi.id,\n    rfiUrl: rfi.url,\n    reference,\n    subject,\n    receiveDate,\n    responseDueDate,\n    projectId,\n    skip: false\n  }\n};"
+      },
+      "id": "499cd289-bf84-4a7f-a870-13a3f1903a0a",
+      "name": "Extract RFI Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const project = $input.first().json;\n\n\nconst internalLeadEmail = $input.first().json.property_internal_lead;\nconst internalLeadName = $input.first().json.property_internal_lead_email;\nconst projectName = $input.first().json.name;\n\nconst rfiData = $('Extract RFI Data').first().json;\n\nreturn {\n  json: {\n    ...rfiData,\n    projectName,\n    assignedEmail:internalLeadEmail,\n    assignedName: internalLeadName || 'Project Team'\n  }\n};"
+      },
+      "id": "ad4bbb61-0c96-4bbb-b769-4a2c5f25ae42",
+      "name": "Determine Assignment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "d97f3678-919b-4658-9219-2e3b04c9e886",
+      "name": "Schedule - Daily SLA Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        16,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const pages = $input.all();\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\n\nconst results = [];\n\nfor (const item of pages) {\n  const rfi = item.json;\n\n  const requiredBy = rfi.property_required_by_date?.start;\n  if (!requiredBy) continue;\n\n  const dueDate = new Date(requiredBy);\n  const daysUntilDue = $input.first().json.property_days_until_due\n\n  if (daysUntilDue === 1 || daysUntilDue <= 0) {\n    results.push({\n      json: {\n        rfiId: rfi.id,\n        rfiUrl: rfi.url,\n        reference: rfi.property_reference,\n        subject: rfi.property_subject,\n        dueDate: requiredBy,\n        daysUntilDue,\n        isOverdue: daysUntilDue < 0,\n        status: rfi.property_status,\n        contractorName: rfi.property_contracter_name,\n        contractorEmail: rfi.property_email_contractor\n      }\n    });\n  }\n}\n\nreturn results.length > 0 ? results: [{ json: { skip: true } }];"
+      },
+      "id": "bae91d1f-37c6-405b-b8f1-4e4be7ac761d",
+      "name": "Check SLA Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8053-802a-c406b6ba5aab",
+          "mode": "list",
+          "cachedResultName": "Project Records ",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658053802ac406b6ba5aab"
+        }
+      },
+      "type": "n8n-nodes-base.notionTrigger",
+      "typeVersion": 1,
+      "position": [
+        -64,
+        -16
+      ],
+      "id": "1aaf7832-e222-44b7-a56c-0a9af0f35d2a",
+      "name": "Notion Trigger",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "databaseId": {
+          "__rl": true,
+          "value": "2a092ecf-c465-80e0-a216-f60c23664dc1",
+          "mode": "list",
+          "cachedResultName": "Projects",
+          "cachedResultUrl": "https://www.notion.so/2a092ecfc46580e0a216f60c23664dc1"
+        }
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        384,
+        -16
+      ],
+      "id": "6b924c94-a1c3-4e92-9d8d-ff34cc8f0959",
+      "name": "Get a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2a092ecf-c465-80e0-a216-f60c23664dc1",
+          "mode": "list",
+          "cachedResultName": "Projects",
+          "cachedResultUrl": "https://www.notion.so/2a092ecfc46580e0a216f60c23664dc1"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Project Code|rich_text",
+              "condition": "equals",
+              "richTextValue": "={{ $('Extract RFI Data').item.json.projectId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        608,
+        -16
+      ],
+      "id": "a319a3de-f59d-41db-8b4d-4443823c854b",
+      "name": "Get many database pages",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "https://www.notion.so/2e392ecfc4658082bc35e6f0a24dbeea?v=2e392ecfc46580319465000c37f30cf6",
+          "mode": "url"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Due Date|date",
+              "date": "={{ $json.responseDueDate }}"
+            },
+            {
+              "key": "Priority|select",
+              "selectValue": "P3 Normal"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "In Progress"
+            },
+            {
+              "key": "Support Party|select",
+              "selectValue": "Vendors"
+            },
+            {
+              "key": "Title|title",
+              "title": "={{ $json.reference }}"
+            },
+            {
+              "key": "Projects Name|rich_text",
+              "textContent": "={{ $json.projectName.split('-')[0] }}"
+            },
+            {
+              "key": "Owner|email",
+              "emailValue": "={{ $json.assignedName }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        1056,
+        -16
+      ],
+      "id": "2ff383bb-ae53-433c-9523-1cf41e60241b",
+      "name": "Create a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Get many database pages').item.json.property_internal_lead_email }}",
+        "subject": "=Request Received for  {{ $json.name }}",
+        "emailType": "text",
+        "message": "=A request received for reference  {{ $json.name }}. Due on {{ $('Determine Assignment').item.json.responseDueDate }}.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1280,
+        -16
+      ],
+      "id": "db3e48d8-e510-4f2a-bb46-45be2860e410",
+      "name": "Send a message",
+      "webhookId": "34ef7c17-bf82-4a00-a94d-1253bba1b559",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8053-802a-c406b6ba5aab",
+          "mode": "list",
+          "cachedResultName": "Project Records ",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658053802ac406b6ba5aab"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Status|select",
+              "condition": "equals",
+              "selectValue": "Under Review"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        384
+      ],
+      "id": "f39dca3d-a314-4815-8502-e0dffe0329ac",
+      "name": "Get many database pages1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2f4ccd12-4ce5-4ebe-b126-f316888c3b83",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        688,
+        384
+      ],
+      "id": "ff8713a0-312c-4fe3-bfea-6d6665dfa3ee",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "sendTo": "iamumair244@gmail.com",
+        "subject": "DUE TASK",
+        "emailType": "text",
+        "message": "={{$json.isOverdue ? 'OVERDUE' : 'DUE TOMORROW'}}: RFI {{$json.reference}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        928,
+        432
+      ],
+      "id": "1f311c4d-856d-46d7-8eca-8272ff142e8d",
+      "name": "Send a message1",
+      "webhookId": "fcd28be0-7f20-4d24-9c97-3b240e9fd71c",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## I'Reminder\n",
+        "height": 272,
+        "width": 1248,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -80,
+        304
+      ],
+      "typeVersion": 1,
+      "id": "e081db43-1efe-4b69-a16c-b21abb95b40b",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## RFI Response Tracker \n",
+        "height": 224,
+        "width": 1616,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -160,
+        -64
+      ],
+      "typeVersion": 1,
+      "id": "acf8a7c4-0d08-4b5d-8782-006eb02e54f4",
+      "name": "Sticky Note1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Extract RFI Data": {
+      "main": [
+        [
+          {
+            "node": "Get a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Assignment": {
+      "main": [
+        [
+          {
+            "node": "Create a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule - Daily SLA Check": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check SLA Status": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract RFI Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a database page": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages": {
+      "main": [
+        [
+          {
+            "node": "Determine Assignment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        []
+      ]
+    },
+    "Get many database pages1": {
+      "main": [
+        [
+          {
+            "node": "Check SLA Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message1": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "89953128-e33e-405b-adcd-48a68aa4c3d3",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "089d9a927c0abf363ffe8a270a9573534e756390e996737e0bdd0a91a64f564e"
+  },
+  "id": "4rrjzAeLpX5vzixp",
+  "tags": []
+}

@@ -1,0 +1,2886 @@
+{
+  "name": "1. Contractor Submission Intake",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "2700fd56-9208-47b9-bbce-9d0ac84cf253",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -960,
+        176
+      ],
+      "id": "9e4c4243-d7e4-4563-99fe-faed30e622f0",
+      "name": "Webhook1",
+      "webhookId": "2700fd56-9208-47b9-bbce-9d0ac84cf253",
+      "alwaysOutputData": false,
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Code in JavaScript').item.json.email }}",
+        "subject": "RFI",
+        "emailType": "text",
+        "message": "=Your request for rfi of project {{ $json.name }} has been added to the list. Your request shall be accepted in short while.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        3424,
+        -560
+      ],
+      "id": "fc9f7aac-ab9a-4063-8322-0360a62b0bfc",
+      "name": "Send a message",
+      "webhookId": "53bc98e7-f08e-4042-a8ed-c01f5835ef31",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let inputs = $input.all()\nlet seq = 0\n  if($input.first().json.property_reference){\n    seq = parseInt($input.first().json.property_reference.split('-')[2])+1\n  }\n  else{\n    seq = 1\n  }\nlet nextSequence = seq ;\nlet paddedSequence =String(nextSequence).padStart(3, '0');\nlet reference = $('Extract Project Info').first().json.projectId + \"-\" + \n$('Extract Project Info').first().json.submissionType + \"-\" + paddedSequence\n\nconsole.log(reference)\nreturn [\n  {\n    json: {\n      reference,\n      required_date:new Date(\n  new Date($('Validate Form Data').first().json.requiredByDate)\n    .setDate(\n      new Date($('Validate Form Data').first().json.requiredByDate).getDate() + 3\n    )\n).toISOString().split('T')[0] ,\n      projectid: $input.first().json.projectId,\n      name: $('Extract Project Info').first().json.contractorName,\n      email: $('Extract Project Info').first().json.contractorEmail,\n      status: $('Get many database pages').first().json.property_status,\n      subject: $('Check Validation').first().json.subject,\n      submissionFor: $('Check Validation').first().json.submissionType,\n      description: $('Check Validation').first().json.description,\n      received: $('Validate Form Data').first().json.submittedAt.split('T')[0],\n      sequence: nextSequence,\n      emailLead : $('Get many database pages').first().json.property_internal_lead_email,\n         url: $('Upload Files to Drive1').isExecuted\n        ? $('Upload Files to Drive').item.json.webContentLink\n        : \"\"\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2976,
+        -400
+      ],
+      "id": "ba04b890-f8b0-43dd-8742-43bd249c40b4",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8053-802a-c406b6ba5aab",
+          "mode": "list",
+          "cachedResultName": "Project Records ",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658053802ac406b6ba5aab"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": " Required By Date|date",
+              "date": "={{ $json.required_date }}"
+            },
+            {
+              "key": "Attachment Link|url",
+              "ignoreIfEmpty": true,
+              "urlValue": "={{ $json.url }}"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "={{ $json.status }}"
+            },
+            {
+              "key": "Subject|rich_text",
+              "textContent": "={{ $json.subject }}"
+            },
+            {
+              "key": "Priority|select",
+              "selectValue": "=\"P3 Normal\"\n   "
+            },
+            {
+              "key": "Received Date|date",
+              "date": "={{ $json.received }}"
+            },
+            {
+              "key": "From Party (Vendors)|rich_text",
+              "textContent": "={{ $json.name }}"
+            },
+            {
+              "key": "Record Type|select",
+              "selectValue": "={{ $json.submissionFor }}"
+            },
+            {
+              "key": "Description|rich_text",
+              "textContent": "={{ $json.description }}"
+            },
+            {
+              "key": "To party Type|select",
+              "selectValue": "=Vendor"
+            },
+            {
+              "key": "To party Type|select",
+              "selectValue": "=Vendor"
+            },
+            {
+              "key": "Email Contractor|email",
+              "emailValue": "={{ $json.email }}"
+            },
+            {
+              "key": "Contracter Name|rich_text",
+              "textContent": "={{ $json.name }}"
+            },
+            {
+              "key": "Reference|title",
+              "title": "={{ $json.reference }}"
+            },
+            {
+              "key": "Project|rich_text",
+              "textContent": "={{ $json.reference.split('-')[0] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        3200,
+        -400
+      ],
+      "id": "5fad1891-cb35-4344-b1b7-cb04a90e5cb6",
+      "name": "Create a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5c3caa33-7045-4978-844f-ebd08d11cba4",
+              "leftValue": "={{ $json.results }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "array",
+                "operation": "lengthGt",
+                "rightType": "number"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1184,
+        -400
+      ],
+      "id": "3dc9ba0e-6698-4707-a031-f50e007e6b89",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2a092ecf-c465-80e0-a216-f60c23664dc1",
+          "mode": "list",
+          "cachedResultName": "Projects",
+          "cachedResultUrl": "https://www.notion.so/2a092ecfc46580e0a216f60c23664dc1"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Project Code|rich_text",
+              "condition": "equals",
+              "richTextValue": "={{ $('Validate Form Data').item.json.projectId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        512,
+        -400
+      ],
+      "id": "afabfb54-f805-4cee-a803-734551262ef3",
+      "name": "Get many database pages",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "databaseId": {
+          "__rl": true,
+          "value": "2a092ecf-c465-80e0-a216-f60c23664dc1",
+          "mode": "list",
+          "cachedResultName": "Projects",
+          "cachedResultUrl": "https://www.notion.so/2a092ecfc46580e0a216f60c23664dc1"
+        }
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        288,
+        -400
+      ],
+      "id": "f6559afe-b5a6-4a6f-b965-7c802b4d1fda",
+      "name": "Get a database",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate uploaded files\nconst uploads = $input.all();\nconst folderUrl = uploads[0].json.webViewLink.split('/').slice(0, -1).join('/');\n\nconst fileLinks = uploads.map(u => ({\n  name: u.json.name,\n  url: u.json.webViewLink\n}));\n\nconst formData = $('Extract Project Info').first().json;\n\nreturn {\n  json: {\n    ...formData,\n    folderUrl: folderUrl,\n    uploadedFiles: fileLinks\n  }\n};"
+      },
+      "id": "02d1b39d-0bfd-462c-8c27-9f9511ba1e4f",
+      "name": "Aggregate Upload Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2528,
+        -480
+      ]
+    },
+    {
+      "parameters": {
+        "inputDataFieldName": "=data",
+        "name": "={{ $json.results[0].json.filename }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create folder3').item.json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "007756ba-6f67-4023-9de4-f8d07e965cfb",
+      "name": "Upload Files to Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2304,
+        -480
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare files for upload\nconst files = $('Extract Project Info').first().json.attachments;\nconst results = [];\n\nfor (let i = 0; i < files.length; i++) {\n  results.push({\n    json: {\n      ...files[i],\n      fileIndex: i,\n      folderId: $input.first().json.id\n    }\n  });\n}\n\nreturn {results};"
+      },
+      "id": "aa78a2b4-c506-4457-9309-ca6c1585fba3",
+      "name": "Split Files for Upload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get first item from input array\nconst projectData = $input.first().json;\n\n// Extract required fields from flat structure\nconst projectCode = projectData.property_project_code || 'UNKNOWN';\nconst projectName = projectData.property_project_name || 'Unknown Project';\nconst internalLeadId = projectData.property_internal_lead?.[0] || null;\n\n// Optional: pull previous node data\nconst formData = $('Check Validation').first().json;\n\n// Return merged output\nreturn {\n  json: {\n    ...formData,\n    projectCode,\n    projectName,\n    internalLeadId,\n    folderDate: new Date().toISOString().split('T')[0],\n    \n  }\n};"
+      },
+      "id": "8fd6761b-6d33-4d6a-9e59-fc438654405c",
+      "name": "Extract Project Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        -400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.error}}"
+            }
+          ]
+        }
+      },
+      "id": "12c2fabe-e8a4-46b1-a7af-8d3c6ea83405",
+      "name": "Check Validation",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        64,
+        -400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get request body\nconst body = $input.first().json.body;\n\n// Ensure submission exists\nif (!body?.submission) {\n  return {\n    json: {\n      error: true,\n      message: 'Invalid submission payload',\n      statusCode: 400\n    }\n  };\n}\n\n// Convert questions array → key/value map\nconst answers = {};\nfor (const q of body.submission.questions) {\n  answers[q.name] = q.value;\n}\n\n// Extract attachments safely\nconst attachments = Array.isArray(answers['Attachments'])\n  ? answers['Attachments'].map(file => ({\n      url: file.url,\n      filename: file.filename\n    }))\n  : [];\n\n// Optional: required fields validation (names must match form exactly)\n/*\nconst requiredFields = [\n  'Project Name',\n  'Submission Type',\n  'Subject',\n  'Description',\n  'Your Name',\n  'Your Email',\n  'Your Company/Organization'\n];\n\nconst missing = requiredFields.filter(\n  field => !answers[field] || answers[field] === ''\n);\n\nif (missing.length > 0) {\n  return {\n    json: {\n      error: true,\n      message: `Missing required fields: ${missing.join(', ')}`,\n      statusCode: 400\n    }\n  };\n}\n*/\n\n// Format required-by date safely\nconst requiredByDate = answers['Response Required By']\n  ? new Date(answers['Response Required By']).toISOString()\n  : null;\n\n// Success output\nreturn {\n  json: {\n    error: false,\n\n    projectId: answers['Project Name'] || '',\n    submissionType: answers['Submission Type'] || '',\n    subject: answers['Subject'] || '',\n    description: answers['Description'] || '',\n\n    requiredByDate,\n\n    contractorName: answers['Your Name'] || '',\n    contractorEmail: answers['Your Email'] || '',\n    contractorCompany: answers['Your Company/Organization'] || '',\n\n    attachments,\n\n    submissionId: body.submission.submissionId,\n    submittedAt: body.submission.submissionTime\n  }\n};"
+      },
+      "id": "efe4514a-5e2f-489c-b759-77985e82bdbb",
+      "name": "Validate Form Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        -400
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.formName }}",
+                    "rightValue": "=New form nNieb",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "5ad0494d-0bcf-419a-9479-2268ea7c4a5e"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "182abf58-89aa-413c-b531-4c577722b205",
+                    "leftValue": "={{ $json.body.formName }}",
+                    "rightValue": "New form bVMWT",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "39fc149c-9cf3-4f99-b762-3eeadfdf275c",
+                    "leftValue": "={{ $json.body.formName }}",
+                    "rightValue": "New form p3EoW",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "807ef399-8512-4288-a648-89678781c44f",
+                    "leftValue": "={{ $json.body.formName }}",
+                    "rightValue": "New form niCgH",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -608,
+        144
+      ],
+      "id": "8aeb0d52-1205-4ea5-903b-723955a327b5",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get request body\nconst body = $input.first().json.body;\n\n// Ensure submission exists\nif (!body?.submission) {\n  return {\n    json: {\n      error: true,\n      message: 'Invalid submission payload',\n      statusCode: 400\n    }\n  };\n}\n\n// Convert questions array → key/value map\nconst answers = {};\nfor (const q of body.submission.questions) {\n  answers[q.name] = q.value;\n}\n\n// Extract attachments safely\nconst attachments = Array.isArray(answers['Attachments'])\n  ? answers['Attachments'].map(file => ({\n      url: file.url,\n      filename: file.filename\n    }))\n  : [];\n\n// Format issue date safely\nconst issueDate = answers['Issue Date']\n  ? new Date(answers['Issue Date']).toISOString()\n  : null;\n\n// Success output\nreturn {\n  json: {\n    error: false,\n\n    projectId: answers['Project'] || '',\n    submissionType: answers['Submission Type'] || '',\n    subject: answers['Subject'] || '',\n    description: answers['Description & Impact'] || '',\n\n    issuedTo: answers['Issued To'] || '',\n    contractorName:$input.first().json.body.submission.questions[5].value,\n    estimatedValueUSD: answers['Estimated Value (USD)'] || 0,\n    issueDate,\n    priority: answers['Priority'] || '',\n    internalNotes: answers['Internal Notes'] || '',\n    status: answers['Ready to'] || '',\n    value: $input.first().json.body.submission.questions[6].value,\n    internal: $input.first().json.body.submission.questions[10].value,\n    attachments,\n\n    submissionId: body.submission.submissionId,\n    submittedAt: body.submission.submissionTime\n  }\n};"
+      },
+      "id": "cc4135f1-a5b5-44af-995d-5eeb477c0f68",
+      "name": "Validate Form Data1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get request body\nconst body = $input.first().json.body;\n\n// Ensure submission exists\nif (!body?.submission) {\n  return {\n    json: {\n      error: true,\n      message: 'Invalid submission payload',\n      statusCode: 400\n    }\n  };\n}\n\n// Convert questions array → key/value map\nconst answers = {};\nfor (const q of body.submission.questions) {\n  answers[q.name] = q.value;\n}\n\n// Extract related documents safely\nconst attachments = Array.isArray(answers['Related Documents'])\n  ? answers['Related Documents'].map(file => ({\n      url: file.url,\n      filename: file.filename\n    }))\n  : [];\n\n// Format dates safely\nconst decisionDate = answers['Decision Date']\n  ? new Date(answers['Decision Date']).toISOString()\n  : null;\n\nconst dueDate = answers['Due Date']\n  ? new Date(answers['Due Date']).toISOString()\n  : null;\n\n// Success output\nreturn {\n  json: {\n    error: false,\n\n    projectId: answers['Project'] || '',\n    decisionSubject: answers['Decision Subject'] || '',\n    decisionDetails: answers['Decision Details'] || '',\n    optionsConsidered: answers['Options Considered'] || '',\n    decisionMaker: answers['Decision Maker'] || '',\n\n    decisionDate,\n\n    impactNextSteps: answers['Impact / Next Steps'] || '',\n\n    followUpActionRequired:\n      answers['Follow-up Action Required?'] === 'Yes',\n\n    actionDescription:\n      answers['Follow-up Action Required?'] === 'Yes'\n        ? answers['Action Description'] || ''\n        : '',\n\n    followUp:\n      answers['Follow-up Action Required?'] === 'Yes'\n        ? 'Yes': 'No',\n\n    assignedTo:$input.first().json.body.submission.questions[10].value?$input.first().json.body.submission.questions[10].value:\"\",\n\n    dueDate:\n      answers['Follow-up Action Required?'] === 'Yes'\n        ? dueDate\n        : null,\n\n    attachments,\n\n    recordedBy: answers['Recorded By'] || '',\n\n    submissionId: body.submission.submissionId,\n    submittedAt: body.submission.submissionTime\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        752
+      ],
+      "id": "02854899-4018-49e6-8f56-5c5f859d82f1",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Code in JavaScript3').item.json.name }}",
+        "subject": "RFI",
+        "emailType": "text",
+        "message": "=Your request for {{ $('Code in JavaScript3').item.json.submissionFor }} of project has been added to the list. Your request shall be accepted in short while.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        3632,
+        -112
+      ],
+      "id": "f91a42c8-1eea-4f50-8c0c-85fa041310fd",
+      "name": "Send a message1",
+      "webhookId": "53bc98e7-f08e-4042-a8ed-c01f5835ef31",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let inputs = $input.all()\nlet seq = 0\n\n  if($input.first().json.property_reference){\n    seq = parseInt($input.first().json.property_reference.split('-')[2])+1\n  }\n  else{\n    seq = 1\n  }\n\nlet nextSequence = seq;\nlet paddedSequence =String(nextSequence).padStart(3, '0');\nlet reference = $('Extract Project Info1').first().json.projectId + \"-\" + \n$('Extract Project Info1').first().json.submissionType + \"-\" + paddedSequence\n\nconsole.log(reference)\n\n\n\nreturn [\n  {\n    json: {\n      reference,\n      \n     issueDate:$('Validate Form Data1').first().json.issueDate.split('T')[0] ,\n      projectid: $input.first().json.projectId,\n      name: $('Extract Project Info1').first().json.contractorName,\n      email: $('Extract Project Info1').first().json.contractorEmail,\n      status: $('Get many database pages3').first().json.property_status,\n      subject: $('Check Validation1').first().json.subject,\n      submissionFor: $('Check Validation1').first().json.submissionType,\n      description: $('Check Validation1').first().json.description,\n      received: $('Validate Form Data1').first().json.submittedAt.split('T')[0],\n      internalNotes: $('Check Validation1').first().json.internalNotes,\n      value: $('Check Validation1').first().json.estimatedValueUSD,\n      sequence: nextSequence,\n      priority: $('Check Validation1').first().json.priority,\n      emailLead: $('Get many database pages3').first().json.property_internal_lead_email,\n            url: $('Upload Files to Drive1').isExecuted\n        ? $('Upload Files to Drive1').item.json.webContentLink\n        : \"\"\n      \n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        -16
+      ],
+      "id": "7beade7c-cc3e-4163-9d14-e28e1aa9e508",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8053-802a-c406b6ba5aab",
+          "mode": "list",
+          "cachedResultName": "Project Records ",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658053802ac406b6ba5aab"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Reference|title",
+              "title": "={{ $json.reference }}"
+            },
+            {
+              "key": "Priority|select",
+              "selectValue": "={{\n  ({\n    High: 'P2 High',\n    Low: 'P3 Normal',\n    Normal: 'P3 Normal',\n    Critical: 'P1 Critical'\n  })[$json.priority] || 'P3 Normal'\n}}"
+            },
+            {
+              "key": "To party Type|select",
+              "selectValue": "=vendor"
+            },
+            {
+              "key": "Project|rich_text",
+              "textContent": "={{ $json.reference.split('-').first() }}"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "={{ $json.status }}"
+            },
+            {
+              "key": "Received Date|date",
+              "date": "={{ $json.received }}"
+            },
+            {
+              "key": "Subject|rich_text",
+              "textContent": "={{ $json.subject }}"
+            },
+            {
+              "key": "Attachment Link|url",
+              "ignoreIfEmpty": true,
+              "urlValue": "={{ $json.url }}"
+            },
+            {
+              "key": "Record Type|select",
+              "selectValue": "={{ $json.submissionFor }}"
+            },
+            {
+              "key": "Description|rich_text",
+              "textContent": "={{ $json.description }}"
+            },
+            {
+              "key": "Internal Notes|rich_text",
+              "textContent": "={{ $json.internalNotes }}"
+            },
+            {
+              "key": "Value|number",
+              "numberValue": "={{ $json.value }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        3408,
+        -16
+      ],
+      "id": "7b280ab0-d3c5-4f00-8907-dff13346cfee",
+      "name": "Create a database page1",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5c3caa33-7045-4978-844f-ebd08d11cba4",
+              "leftValue": "={{ $json.results }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "array",
+                "operation": "lengthGt",
+                "rightType": "number"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1184,
+        -16
+      ],
+      "id": "01277b89-95ff-45d3-816b-5d7e1d3504f9",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2a092ecf-c465-80e0-a216-f60c23664dc1",
+          "mode": "list",
+          "cachedResultName": "Projects",
+          "cachedResultUrl": "https://www.notion.so/2a092ecfc46580e0a216f60c23664dc1"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Project Code|rich_text",
+              "condition": "equals",
+              "richTextValue": "={{ $('Check Validation1').item.json.projectId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        512,
+        -16
+      ],
+      "id": "f05c93ea-180c-4a6f-bbd2-3abdaf22e99b",
+      "name": "Get many database pages3",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "databaseId": {
+          "__rl": true,
+          "value": "2a092ecf-c465-80e0-a216-f60c23664dc1",
+          "mode": "list",
+          "cachedResultName": "Projects",
+          "cachedResultUrl": "https://www.notion.so/2a092ecfc46580e0a216f60c23664dc1"
+        }
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        288,
+        -16
+      ],
+      "id": "6af33f56-9cae-4168-aff7-26503e6e4195",
+      "name": "Get a database3",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate uploaded files\nconst uploads = $input.all();\nconst folderUrl = uploads[0].json.webViewLink.split('/').slice(0, -1).join('/');\n\nconst fileLinks = uploads.map(u => ({\n  name: u.json.name,\n  url: u.json.webViewLink\n}));\n\nconst formData = $('Extract Project Info1').first().json;\n\nreturn {\n  json: {\n    ...formData,\n    folderUrl: folderUrl,\n    uploadedFiles: fileLinks\n  }\n};"
+      },
+      "id": "5c059f98-f954-419f-b736-39ce5be78352",
+      "name": "Aggregate Upload Results1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "name": "={{ $json.results[0].json.filename }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create folder').item.json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "a2e2fb55-54b3-43b6-bb97-6d9af7055e03",
+      "name": "Upload Files to Drive1",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2240,
+        -144
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare files for upload\nconst files = $('Extract Project Info1').first().json.attachments;\nconst results = [];\n\nfor (let i = 0; i < files.length; i++) {\n  results.push({\n    json: {\n      ...files[i],\n      fileIndex: i,\n      folderId: $input.first().json.id\n    }\n  });\n}\n\nreturn {results};"
+      },
+      "id": "83275957-1fe9-4cdc-bd12-fedf41e3a17b",
+      "name": "Split Files for Upload1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get first item from input array\nconst projectData = $input.first().json;\n\n// Extract required fields from flat structure\nconst projectCode = projectData.property_project_code || 'UNKNOWN';\nconst projectName = projectData.property_project_name || 'Unknown Project';\nconst internalLeadId = projectData.property_internal_lead?.[0] || null;\n\n// Optional: pull previous node data\nconst formData = $('Check Validation1').first().json;\n\n// Return merged output\nreturn {\n  json: {\n    ...formData,\n    projectCode,\n    projectName,\n    internalLeadId,\n    folderDate: new Date().toISOString().split('T')[0],\n    \n  }\n};"
+      },
+      "id": "7d8af19f-6a64-433c-a41a-b930f9feb4f0",
+      "name": "Extract Project Info1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.error}}"
+            }
+          ]
+        }
+      },
+      "id": "7d766d35-a523-496e-b4aa-d0395e517c82",
+      "name": "Check Validation1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        64,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "let inputs = $input.all() || [];\nlet seq = 0\nif(inputs.length > 0){\n  if($input.first().json.property_reference){\n    seq = parseInt($input.first().json.property_reference.split('-')[2]) + 1\n  }\n  else{\n    seq = 1\n  }\n}\n\nlet nextSequence = seq;\nlet paddedSequence =String(nextSequence).padStart(3, '0');\nlet reference = $('Extract Project Info2').first().json.projectId + \"-\" +\"SR-\"+ paddedSequence\n\nconsole.log(reference)\n\nreturn [\n  {\n    json: {\n      reference,\n      projectid: $('Check Validation2').first().json.projectId,\n      subject: $('Check Validation2').first().json.observationType,\n      submissionFor: \"Site Report\",\n      description: $('Check Validation2').first().json.description,\n      received: $('Check Validation2').first().json.submittedAt.split('T')[0],\n      severity: $('Validate Form Data2').first().json.severity,\n      Location: $('Validate Form Data2').first().json.locationArea,\n      ObType: $('Validate Form Data2').first().json.observationType,\n      sequence: nextSequence,\n      Responsible: $('Check Validation2').first().json.responsibleParty,\n      immidiate: $('Check Validation2').first().json.immediateActionRequired,\n      reportedBy: $('Check Validation2').first().json.reportedBy,\n      leadEmail: $('Get many database pages5').first().json.property_internal_lead_email,\n      url: $('Upload Files to Drive2').isExecuted? $('Upload Files to Drive2').item.json.webContentLink: \"\"\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2976,
+        368
+      ],
+      "id": "806f377b-cd41-4c74-b939-e0122985f6b4",
+      "name": "Code in JavaScript4",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8053-802a-c406b6ba5aab",
+          "mode": "list",
+          "cachedResultName": "Project Records ",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658053802ac406b6ba5aab"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Received Date|date",
+              "date": "={{ $json.received }}"
+            },
+            {
+              "key": "Severity|select",
+              "selectValue": "={{ $json.severity }}"
+            },
+            {
+              "key": "Reference|title",
+              "title": "={{ $json.reference }}"
+            },
+            {
+              "key": "Received Date|date",
+              "date": "={{ $json.received }}"
+            },
+            {
+              "key": "Record Type|select",
+              "selectValue": "={{ $json.submissionFor }}"
+            },
+            {
+              "key": "Status|select",
+              "selectValue": "Draft"
+            },
+            {
+              "key": "Subject|rich_text",
+              "textContent": "={{ $json.subject }}"
+            },
+            {
+              "key": "Description|rich_text",
+              "textContent": "={{ $json.description }}"
+            },
+            {
+              "key": "Attachment Link|url",
+              "ignoreIfEmpty": true,
+              "urlValue": "={{ $json.url }}"
+            },
+            {
+              "key": "Immidiate Action|select",
+              "selectValue": "={{ String($json.immidiate)}}"
+            },
+            {
+              "key": "Location|rich_text",
+              "textContent": "={{ $json.Location }}"
+            },
+            {
+              "key": "Reported By|rich_text",
+              "textContent": "={{ $json.reportedBy }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        3200,
+        368
+      ],
+      "id": "d2074612-97ef-4650-bc81-e6f3ea1bd140",
+      "name": "Create a database page2",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5c3caa33-7045-4978-844f-ebd08d11cba4",
+              "leftValue": "={{ $json.results }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "array",
+                "operation": "lengthGt",
+                "rightType": "number"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1184,
+        368
+      ],
+      "id": "cf925f65-9e7f-4629-b818-ac958a36be63",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2a092ecf-c465-80e0-a216-f60c23664dc1",
+          "mode": "list",
+          "cachedResultName": "Projects",
+          "cachedResultUrl": "https://www.notion.so/2a092ecfc46580e0a216f60c23664dc1"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Project Code|rich_text",
+              "condition": "equals",
+              "richTextValue": "={{ $('Check Validation2').item.json.projectId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        512,
+        368
+      ],
+      "id": "e09099ee-9b4d-4390-8745-b91a584a3165",
+      "name": "Get many database pages5",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "databaseId": {
+          "__rl": true,
+          "value": "2a092ecf-c465-80e0-a216-f60c23664dc1",
+          "mode": "list",
+          "cachedResultName": "Projects",
+          "cachedResultUrl": "https://www.notion.so/2a092ecfc46580e0a216f60c23664dc1"
+        }
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        288,
+        368
+      ],
+      "id": "48dbed5e-dcbf-451b-b1c0-12b5e6bd3f17",
+      "name": "Get a database5",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate uploaded files\nconst uploads = $input.all();\nconst folderUrl = uploads[0].json.webViewLink.split('/').slice(0, -1).join('/');\n\nconst fileLinks = uploads.map(u => ({\n  name: u.json.name,\n  url: u.json.webViewLink\n}));\n\nconst formData = $('Extract Project Info2').first().json;\n\nreturn {\n  json: {\n    ...formData,\n    folderUrl: folderUrl,\n    uploadedFiles: fileLinks\n  }\n};"
+      },
+      "id": "9fd59b6e-e9f6-4951-8118-03152d8796a9",
+      "name": "Aggregate Upload Results2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2528,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create folder6').item.json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "f3a856d7-1d33-4141-86ba-68f054bd9b36",
+      "name": "Upload Files to Drive2",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2304,
+        256
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare files for upload\nconst files = $('Extract Project Info2').first().json.photos;\nconst results = [];\n\n\n\nfor (let i = 0; i < files.length; i++) {\n  results.push({\n    json: {\n      ...files[i],\n      fileIndex: i,\n      folderId: $input.first().json.id\n    }\n  });\n}\n\nreturn {results};"
+      },
+      "id": "f0f28de2-7c9f-41a9-87cc-1b1497a0544a",
+      "name": "Split Files for Upload2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get first item from input array\nconst projectData = $input.first().json;\n\n// Extract required fields from flat structure\nconst projectCode = projectData.property_project_code || 'UNKNOWN';\nconst projectName = projectData.property_project_name || 'Unknown Project';\nconst internalLeadId = projectData.property_internal_lead?.[0] || null;\n\n// Optional: pull previous node data\nconst formData = $('Check Validation2').first().json;\n\n// Return merged output\nreturn {\n  json: {\n    ...formData,\n    projectCode,\n    projectName,\n    internalLeadId,\n    folderDate: new Date().toISOString().split('T')[0],\n    \n  }\n};"
+      },
+      "id": "94afad0e-6ad6-4c26-9836-5ff425dec037",
+      "name": "Extract Project Info2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.error}}"
+            }
+          ]
+        }
+      },
+      "id": "736eb191-58cb-4970-a7a5-e3e7fef0d274",
+      "name": "Check Validation2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        64,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('If').item.json.results[0].json.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2080,
+        -480
+      ],
+      "id": "50591dba-8a33-44f8-af0b-733fa7db4cec",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('If1').item.json.results[0].json.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2080,
+        -144
+      ],
+      "id": "4a6f9ed6-d63a-48b5-b178-386d703da112",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8053-802a-c406b6ba5aab",
+          "mode": "list",
+          "cachedResultName": "Project Records ",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658053802ac406b6ba5aab"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Reference|title",
+              "condition": "contains",
+              "titleValue": "={{ $('Extract Project Info1').item.json.projectId + \"-\"+\n$('Extract Project Info1').item.json.submissionType }}\n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        2688,
+        -16
+      ],
+      "id": "b9ff8734-522e-4041-bea7-ab657169202d",
+      "name": "Get many database pages2",
+      "alwaysOutputData": true,
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8053-802a-c406b6ba5aab",
+          "mode": "list",
+          "cachedResultName": "Project Records ",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658053802ac406b6ba5aab"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Reference|title",
+              "condition": "contains",
+              "titleValue": "={{ $('Extract Project Info').item.json.projectId + \"-\"+\n$('Extract Project Info').item.json.submissionType }}\n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        2752,
+        -400
+      ],
+      "id": "5998a203-5751-428d-82ef-8e1cf0e7b1b5",
+      "name": "Get many database pages6",
+      "alwaysOutputData": true,
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $('If2').item.json.results[0].json.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2080,
+        256
+      ],
+      "id": "9db9633e-ded8-4e8a-83b5-53fa98d1f7b7",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8053-802a-c406b6ba5aab",
+          "mode": "list",
+          "cachedResultName": "Project Records ",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658053802ac406b6ba5aab"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Reference|title",
+              "condition": "contains",
+              "titleValue": "={{ $('Check Validation2').item.json.projectId+\"-\"+\"SR\" }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        2752,
+        368
+      ],
+      "id": "3683a772-7e2d-4e20-a86c-edca63c0012a",
+      "name": "Get many database pages7",
+      "alwaysOutputData": true,
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $('Extract Project Info2').item.json.requiredByDate.split('T')[0] }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1856,
+        256
+      ],
+      "id": "fe8a9d70-e003-458d-aea0-90cc3e69765c",
+      "name": "Create folder6",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "=Submissions",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1632,
+        256
+      ],
+      "id": "5ac39dc1-f58d-4c2a-b458-ef82d0653e32",
+      "name": "Create folder7",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $json.projectId }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "=https://drive.google.com/drive/folders/1F9xPYTp62DE5y-yKHx9AHeyZr_R_SEdQ",
+          "mode": "url"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1408,
+        256
+      ],
+      "id": "63ebdb36-8c64-469b-af12-8a07b12e369c",
+      "name": "Create folder8",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $('Extract Project Info').item.json.requiredByDate.split('T')[0] }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1856,
+        -480
+      ],
+      "id": "c6d778d8-e87c-4bc4-a401-1b8942340111",
+      "name": "Create folder3",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "=Submissions",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1632,
+        -480
+      ],
+      "id": "c7b01cff-3535-4117-aafb-c2193debaf15",
+      "name": "Create folder2",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $json.projectId }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "=https://drive.google.com/drive/folders/1F9xPYTp62DE5y-yKHx9AHeyZr_R_SEdQ",
+          "mode": "url"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1408,
+        -480
+      ],
+      "id": "b357ce81-fe81-4dd8-8433-fea80e299ee5",
+      "name": "Create folder1",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $('Extract Project Info1').item.json.requiredByDate.split('T')[0] }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1856,
+        -144
+      ],
+      "id": "45757130-4246-4543-ab07-6f4c285ad2d9",
+      "name": "Create folder",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $json.projectId }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "=https://drive.google.com/drive/folders/1F9xPYTp62DE5y-yKHx9AHeyZr_R_SEdQ",
+          "mode": "url"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1408,
+        -144
+      ],
+      "id": "3f56b394-bba5-4c44-ad35-f8d3a72ca85f",
+      "name": "Create folder5",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "=Submissions",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1632,
+        -144
+      ],
+      "id": "5230e58a-1bd9-4ccc-8c40-df11f9d94d2d",
+      "name": "Create folder4",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get request body\nconst body = $input.first().json.body;\n\n// Ensure submission exists\nif (!body?.submission) {\n  return {\n    json: {\n      error: true,\n      message: 'Invalid submission payload',\n      statusCode: 400\n    }\n  };\n}\n\n// Convert questions array → key/value map\nconst answers = {};\nfor (const q of body.submission.questions) {\n  answers[q.name] = q.value;\n}\n\n// Extract photos safely\nconst photos = Array.isArray(answers['Photos'])\n  ? answers['Photos'].map(file => ({\n      url: file.url,\n      filename: file.filename\n    }))\n  : [];\n\n// Success output\nreturn {\n  json: {\n    error: false,\n\n    projectId: answers['Project'] || '',\n    observationType: answers['Observation Type'] || '',\n    locationArea: answers['Location / Area'] || '',\n    description: answers['Description'] || '',\n    severity: answers['Severity'] || '',\n    responsibleParty: answers['Responsible Party'] || '',\n    immediateActionRequired:\n      answers['Immediate Action Required?'] === 'Yes',\n\n    reportedBy: answers['Your Name'] || '',\n\n    photos,\n\n    submissionId: body.submission.submissionId,\n    submittedAt: body.submission.submissionTime\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        368
+      ],
+      "id": "b97824aa-946b-4dc0-83eb-0b08d61d08dd",
+      "name": "Validate Form Data2"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Code in JavaScript5').item.json.assignedto }}",
+        "subject": "RFI",
+        "emailType": "text",
+        "message": "=An assignment has been loged to you in client dicision.\n\nDetails: {{ $('Code in JavaScript5').item.json.details }}\n\nAttachment Link: {{ $('Code in JavaScript5').item.json.url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        3440,
+        752
+      ],
+      "id": "4d8f38ed-1e49-4145-b92c-1b1c33fe3929",
+      "name": "Send a message3",
+      "webhookId": "53bc98e7-f08e-4042-a8ed-c01f5835ef31",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e492ecf-c465-80d5-8e21-c4ab0830bffc",
+          "mode": "list",
+          "cachedResultName": "Client Dicisions",
+          "cachedResultUrl": "https://www.notion.so/2e492ecfc46580d58e21c4ab0830bffc"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Reference|title",
+              "title": "={{ $json.projectid }}"
+            },
+            {
+              "key": "Subject|rich_text",
+              "textContent": "={{ $json.subject }}"
+            },
+            {
+              "key": "Impact|rich_text",
+              "textContent": "={{ $json.details }}"
+            },
+            {
+              "key": "Date|date",
+              "date": "={{ $json.received }}"
+            },
+            {
+              "key": "Options Considered|rich_text",
+              "textContent": "={{ $json.optionsConsidered }}"
+            },
+            {
+              "key": "Recorded by|rich_text",
+              "textContent": "={{ $json.recoder }}"
+            },
+            {
+              "key": "Dicision Maker|rich_text",
+              "textContent": "={{ $json.maker }}"
+            },
+            {
+              "key": "Follow-up|select",
+              "selectValue": "={{ String($json.follow) }}"
+            },
+            {
+              "key": "Due Date|date",
+              "date": "={{ $json.dueDate.split('-')[0] }}"
+            },
+            {
+              "key": "Assigned To email|email",
+              "emailValue": "={{ $json.assignedto }}"
+            },
+            {
+              "key": "Action Description|rich_text",
+              "textContent": "={{ $json.actionDescription }}"
+            },
+            {
+              "key": "Steps|rich_text",
+              "textContent": "={{ $json.nexxt }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        3200,
+        752
+      ],
+      "id": "b26f87cb-21c7-4b4c-8ac7-16ee84e6938e",
+      "name": "Create a database page3",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5c3caa33-7045-4978-844f-ebd08d11cba4",
+              "leftValue": "={{ $json.results }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "array",
+                "operation": "lengthGt",
+                "rightType": "number"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1184,
+        752
+      ],
+      "id": "9df18ed8-7787-4966-a124-63aa8bde84b7",
+      "name": "If3"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2a092ecf-c465-80e0-a216-f60c23664dc1",
+          "mode": "list",
+          "cachedResultName": "Projects",
+          "cachedResultUrl": "https://www.notion.so/2a092ecfc46580e0a216f60c23664dc1"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Project Code|rich_text",
+              "condition": "equals",
+              "richTextValue": "={{ $('Check Validation3').item.json.projectId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        512,
+        752
+      ],
+      "id": "010bd031-e89b-42bb-92d8-cae885617149",
+      "name": "Get many database pages8",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "databaseId": {
+          "__rl": true,
+          "value": "2a092ecf-c465-80e0-a216-f60c23664dc1",
+          "mode": "list",
+          "cachedResultName": "Projects",
+          "cachedResultUrl": "https://www.notion.so/2a092ecfc46580e0a216f60c23664dc1"
+        }
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        288,
+        752
+      ],
+      "id": "8d41ffe3-a740-4445-8c26-7b6f67c53148",
+      "name": "Get a database6",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare files for upload\nconst files = $input.first().json.attachments\nconst results = [];\n\n\n\nfor (let i = 0; i < files.length; i++) {\n  results.push({\n    json: {\n      ...files[i],\n      fileIndex: i,\n      folderId: $input.first().json.id\n    }\n  });\n}\n\nreturn {results};"
+      },
+      "id": "c61353a0-6720-477b-98a0-db6b95544010",
+      "name": "Split Files for Upload3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get first item from input array\nconst projectData = $input.first().json;\n\n// Extract required fields from flat structure\nconst projectCode = projectData.property_project_code || 'UNKNOWN';\nconst projectName = projectData.property_project_name || 'Unknown Project';\nconst internalLeadId = projectData.property_internal_lead?.[0] || null;\n\n// Optional: pull previous node data\nconst formData = $('Check Validation3').first().json;\n\n// Return merged output\nreturn {\n  json: {\n    ...formData,\n    projectCode,\n    projectName,\n    internalLeadId,\n    folderDate: new Date().toISOString().split('T')[0],\n    \n  }\n};"
+      },
+      "id": "2af6aa54-79f8-498e-a838-308c4b78bcdb",
+      "name": "Extract Project Info3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.error}}"
+            }
+          ]
+        }
+      },
+      "id": "e1eac592-2c91-4ebc-94ad-4b43d2de093e",
+      "name": "Check Validation3",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        64,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate uploaded files\nconst uploads = $input.all();\nconst folderUrl = uploads[0].json.webViewLink.split('/').slice(0, -1).join('/');\n\nconst fileLinks = uploads.map(u => ({\n  name: u.json.name,\n  url: u.json.webViewLink\n}));\n\nconst formData = $('Extract Project Info3').first().json;\n\nreturn {\n  json: {\n    ...formData,\n    folderUrl: folderUrl,\n    uploadedFiles: fileLinks\n  }\n};"
+      },
+      "id": "04094dd4-dd76-42f5-8ae9-b09d30eeb2b3",
+      "name": "Aggregate Upload Results3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2528,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create folder9').item.json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "923e3dcc-539e-464f-a064-fbfb036ba508",
+      "name": "Upload Files to Drive3",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2304,
+        640
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $('If3').item.json.results[0].json.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2080,
+        640
+      ],
+      "id": "d388ddcc-f625-47d5-9ac0-57b06c42892c",
+      "name": "HTTP Request3"
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $('Switch').item.json.body.submission.submissionTime.split('T')[0] }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1856,
+        640
+      ],
+      "id": "119500fe-556d-4cce-b528-847dc9c70420",
+      "name": "Create folder9",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "=Submissions",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1632,
+        640
+      ],
+      "id": "dbff67df-c6fd-4fde-9307-ade5e517101c",
+      "name": "Create folder10",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $json.projectId }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "=https://drive.google.com/drive/folders/1F9xPYTp62DE5y-yKHx9AHeyZr_R_SEdQ",
+          "mode": "url"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1408,
+        640
+      ],
+      "id": "787a0d36-86c3-42d6-8015-1a778eb2b82f",
+      "name": "Create folder11",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "5Vl9EV1H2U2TlWkD",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let inputs = $input.all() || [];\n\n\nreturn [\n  {\n    json: {\n      projectid: $('Check Validation3').first().json.projectId,\n      subject: $('Check Validation3').first().json.decisionSubject,\n      details: $('Check Validation3').first().json.decisionDetails,\n      received: $('Check Validation3').first().json.submittedAt.split('T')[0],\n      optionsConsidered:$('Check Validation3').first().json.optionsConsidered ,\n      nexxt : $('Check Validation3').first().json.impactNextSteps,\n      actionDescription: $('Check Validation3').first().json.actionDescription,\n      assignedto: $('Check Validation3').first().json.assignedTo,\n      dueDate : $('Check Validation3').first().json.dueDate,\n      follow :$('Check Validation3').first().json.followUpActionRequired,\n      maker : $('Switch').first().json.body.submission.questions[4].value,\n      dated: $('Switch').first().json.body.submission.questions[5].value.split('-')[0],\n      recoder:$('Switch').first().json.body.submission.questions[12].value,\n      nameP: $('Switch').first().json.body.submission.questions[0].value,\n       url: $('Upload Files to Drive3').isExecuted? $('Upload Files to Drive3').item.json.webContentLink: \"\"\n    \n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2976,
+        752
+      ],
+      "id": "6207e975-36f1-4d11-ac58-382f460669ce",
+      "name": "Code in JavaScript5",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e492ecf-c465-80d5-8e21-c4ab0830bffc",
+          "mode": "list",
+          "cachedResultName": "Client Dicisions",
+          "cachedResultUrl": "https://www.notion.so/2e492ecfc46580d58e21c4ab0830bffc"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Reference|title",
+              "condition": "contains",
+              "titleValue": "={{ $('Check Validation3').item.json.projectId+\"-\"+\"SR\" }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        2752,
+        752
+      ],
+      "id": "a44c848c-0912-490e-84c2-66f63937decf",
+      "name": "Get many database pages9",
+      "alwaysOutputData": true,
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Code in JavaScript').item.json.emailLead }}",
+        "subject": "=RFI request {{ $('Create a database page').item.json.name }}",
+        "message": "=Request for rfi from {{ $('Create a database page').item.json.property_from_party_vendors }}. Added to Project Records",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        3440,
+        -368
+      ],
+      "id": "5beaf78f-cd4a-4c6b-ab2f-44c022e5c67e",
+      "name": "Send a message4",
+      "webhookId": "8d9bb166-e26b-4d08-a273-add71695b754",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Code in JavaScript3').item.json.emailLead }}",
+        "subject": "=RFI request {{ $json.name }}",
+        "message": "=Request for rfi from {{ $('Code in JavaScript3').item.json.name }}. Added to Project Records",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        3648,
+        64
+      ],
+      "id": "4108ec9e-2110-4dee-b7d1-52b8a9c3d801",
+      "name": "Send a message5",
+      "webhookId": "8d9bb166-e26b-4d08-a273-add71695b754",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Code in JavaScript4').item.json.leadEmail }}",
+        "subject": "=RFI request {{ $json.name }}",
+        "message": "=Site report received. Added to Project Records.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        3440,
+        368
+      ],
+      "id": "dc7ef360-4145-4434-b9b8-83e7e119b23d",
+      "name": "Send a message6",
+      "webhookId": "8d9bb166-e26b-4d08-a273-add71695b754",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Contractor Submission Intake",
+        "height": 1600,
+        "width": 4864,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1024,
+        -592
+      ],
+      "typeVersion": 1,
+      "id": "6b352a0c-ccec-45b6-b650-7517b8cafaad",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Create a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a message4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Create folder1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get many database pages6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages": {
+      "main": [
+        [
+          {
+            "node": "Extract Project Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a database": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        []
+      ]
+    },
+    "Aggregate Upload Results": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Files to Drive": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Upload Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Files for Upload": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Project Info": {
+      "main": [
+        [
+          {
+            "node": "Split Files for Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Validation": {
+      "main": [
+        [
+          {
+            "node": "Get a database",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Validate Form Data": {
+      "main": [
+        [
+          {
+            "node": "Check Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Validate Form Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validate Form Data1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validate Form Data2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "Create a database page1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page1": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a message5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Create folder5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get many database pages2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages3": {
+      "main": [
+        [
+          {
+            "node": "Extract Project Info1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a database3": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Upload Results1": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Files to Drive1": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Upload Results1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Files for Upload1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Project Info1": {
+      "main": [
+        [
+          {
+            "node": "Split Files for Upload1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Validation1": {
+      "main": [
+        [
+          {
+            "node": "Get a database3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Form Data1": {
+      "main": [
+        [
+          {
+            "node": "Check Validation1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript4": {
+      "main": [
+        [
+          {
+            "node": "Create a database page2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page2": {
+      "main": [
+        [
+          {
+            "node": "Send a message6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Create folder8",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get many database pages7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages5": {
+      "main": [
+        [
+          {
+            "node": "Extract Project Info2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a database5": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Upload Results2": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Files to Drive2": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Upload Results2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Files for Upload2": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Project Info2": {
+      "main": [
+        [
+          {
+            "node": "Split Files for Upload2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Validation2": {
+      "main": [
+        [
+          {
+            "node": "Get a database5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Upload Files to Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Upload Files to Drive1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages6": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "Upload Files to Drive2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages7": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create folder7": {
+      "main": [
+        [
+          {
+            "node": "Create folder6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create folder8": {
+      "main": [
+        [
+          {
+            "node": "Create folder7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create folder6": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create folder2": {
+      "main": [
+        [
+          {
+            "node": "Create folder3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create folder1": {
+      "main": [
+        [
+          {
+            "node": "Create folder2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create folder3": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create folder5": {
+      "main": [
+        [
+          {
+            "node": "Create folder4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create folder4": {
+      "main": [
+        [
+          {
+            "node": "Create folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create folder": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Form Data2": {
+      "main": [
+        [
+          {
+            "node": "Check Validation2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page3": {
+      "main": [
+        [
+          {
+            "node": "Send a message3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "Create folder11",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get many database pages9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages8": {
+      "main": [
+        [
+          {
+            "node": "Extract Project Info3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a database6": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Files for Upload3": {
+      "main": [
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Project Info3": {
+      "main": [
+        [
+          {
+            "node": "Split Files for Upload3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Validation3": {
+      "main": [
+        [
+          {
+            "node": "Get a database6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Check Validation3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Files to Drive3": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Upload Results3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request3": {
+      "main": [
+        [
+          {
+            "node": "Upload Files to Drive3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create folder9": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create folder10": {
+      "main": [
+        [
+          {
+            "node": "Create folder9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create folder11": {
+      "main": [
+        [
+          {
+            "node": "Create folder10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Upload Results3": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript5": {
+      "main": [
+        [
+          {
+            "node": "Create a database page3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages9": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "54e19ec0-2ead-467d-bdca-b408ae66d0c4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "089d9a927c0abf363ffe8a270a9573534e756390e996737e0bdd0a91a64f564e"
+  },
+  "id": "RFqHzL3IW2ScM58M",
+  "tags": []
+}

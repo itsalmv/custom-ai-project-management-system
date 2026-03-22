@@ -1,0 +1,747 @@
+{
+  "name": "5. AI Meeting Minutes Processor",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const meeting = $input.first().json;\nconst content = $input.first().json[\"Meeting notes\"];\n\nif (content.length < 10) {\n  return {json: {skip: true, reason: 'Content too short'}};\n}\n\nreturn {\n  json: {\n    meetingId: meeting.id,\n    meetingUrl: meeting.url,\n    \"subject\":$input.first().json.Agenda,\n    \"contact\":$input.first().json[\"Internal Lead Email\"],\n    \"Content\": $input.first().json[\"Meeting notes\"],\n    \"projectId\": $input.first().json[\"Meeting Title\"],\n    skip: false\n  }\n};"
+      },
+      "id": "5f5c084c-7c7f-4910-b9c2-fe1ea2311227",
+      "name": "Extract Meeting Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3056,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "databaseId": {
+          "__rl": true,
+          "value": "2e492ecf-c465-8063-af4e-c53384b81041",
+          "mode": "list",
+          "cachedResultName": "Meetings",
+          "cachedResultUrl": "https://www.notion.so/2e492ecfc4658063af4ec53384b81041"
+        }
+      },
+      "type": "n8n-nodes-base.notionTrigger",
+      "typeVersion": 1,
+      "position": [
+        -3280,
+        672
+      ],
+      "id": "6b44bdd7-a1ce-4ffd-8dc8-49ec1db4a521",
+      "name": "Notion Trigger",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Clean and parse JSON from text fields wrapped in ```\nreturn items.map(item => {\n    let text = item.json.text || \"\";\n\n    // Remove ``` or ```json code block wrappers\n    text = text.replace(/^```(json)?\\s*/, \"\").replace(/```$/, \"\").trim();\n\n    // Parse JSON\n    let parsed = {};\n    try {\n        parsed = JSON.parse(text);\n    } catch (err) {\n        console.error(\"JSON parse error:\", err);\n        parsed = null;\n    }\n\n    // Optional: Ensure reference IDs exist in code node\n    if (parsed && parsed.action_items) {\n        const referenceRegex = /\\b[A-Z]{3}-\\d{3}-DCN-\\d{3}\\b/;\n        parsed.action_items = parsed.action_items.map(a => {\n            const match = a.description.match(referenceRegex) || a.reference?.match(referenceRegex);\n            a.code = { reference_id: match ? match[0] : null };\n            return a;\n        });\n    }\n\n    return { json: parsed };\n});"
+      },
+      "id": "c6a493a3-3b85-4009-8e75-e16c0acbf9f1",
+      "name": "Parse Claude Response1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2256,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.Content }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "Extract and return ONLY a JSON object with this structure: { “action_items”: [ { “title”: “Clear action statement”, 'reference':correct reference number,“owner”: “Person’s name if mentioned, or ‘Unassigned’”, “due_date”: “YYYY-MM-DD if mentioned, or null”, “priority”: “P1/P2/P3/P4 based on urgency, default P3”, “description”: “Any additional context” } ], “decisions”: [ { 'reference': from the data, “decision”: “What was decided”, “decision_maker”: “Who made the decision (client/team/vendor)”, “impact”: “Brief impact statement”, “requires_followup”: true/false } ], “risks_issues”: [ { 'reference': from the data“,type”: “risk or issue”, “description”: “What is it”, “severity”: “high/medium/low” } ], “summary_tags”: [“tag1”, “tag2”] // 3-5 key topics discussed } Rules: Only extract explicit action items with clear owners Decisions must be definitive, not just discussions Be conservative - if unsure, don’t extract Return valid JSON only, no other text\nReference is usually of the type ({RM001 whatever text}-{DCN or whatevr}-{sqeuence of the form 001. or whatever} )"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        -2608,
+        672
+      ],
+      "id": "b4aa0b6b-753c-4ebe-b91b-8fa5475a2f9e",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "611c2938-a009-4a8a-864c-1c4e01983e78",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2832,
+        672
+      ],
+      "id": "cbf373ea-6ecc-4e5c-b37c-0a2f431fcf1d",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8082-bc35-e6f0a24dbeea",
+          "mode": "list",
+          "cachedResultName": "Task & Actions",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658082bc35e6f0a24dbeea"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Title|title",
+              "title": "={{ $json.reference }}"
+            },
+            {
+              "key": "Due Date|date",
+              "date": "={{ $json.due_date }}"
+            },
+            {
+              "key": "Priority|select",
+              "selectValue": "={{ ({\n  'P1': 'P1 Critical',\n  'P2': 'P2 High',\n  'P3': 'P3 Normal',\n  'P4': 'P4 Low'\n})[$json.priority] || $json.priority }}"
+            },
+            {
+              "key": "Projects Name|rich_text",
+              "textContent": "={{ $json.title }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -1584,
+        384
+      ],
+      "id": "be7c1e80-c8a2-4a43-af48-1a135e552b32",
+      "name": "Create a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "action_items",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -1808,
+        384
+      ],
+      "id": "d6fd867e-0b0e-4f30-9ae6-6fb6ef47c6ee",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        -2832,
+        944
+      ],
+      "id": "ef9f47ed-02c5-4a16-be03-086d49f01371",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "im0wRDMc1nxRopKR",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2670fbc6-c021-4778-b1b6-a7fab49d6da7",
+              "leftValue": "={{ $json.action_items }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "array",
+                "operation": "lengthNotEquals",
+                "rightType": "number"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2032,
+        384
+      ],
+      "id": "191f891d-babc-4a18-9744-847a1ae4c0bd",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7171a183-ee5f-4b29-a994-6d71a256a1e4",
+              "leftValue": "={{ $json.decisions }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "array",
+                "operation": "lengthNotEquals",
+                "rightType": "number"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2032,
+        576
+      ],
+      "id": "8fef61d5-f2f6-4441-95e1-6da09b79de1c",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e492ecf-c465-80d5-8e21-c4ab0830bffc",
+          "mode": "list",
+          "cachedResultName": "Client Dicisions",
+          "cachedResultUrl": "https://www.notion.so/2e492ecfc46580d58e21c4ab0830bffc"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Dicision|rich_text",
+              "textContent": "={{ $json.decision }}"
+            },
+            {
+              "key": "Reference|title",
+              "title": "={{ $json.reference }}"
+            },
+            {
+              "key": "Dicision Maker|rich_text",
+              "textContent": "={{ $json.decision_maker }}"
+            },
+            {
+              "key": "Follow-up|select",
+              "selectValue": "={{ $json.requires_followup }}"
+            },
+            {
+              "key": "Impact|rich_text",
+              "textContent": "={{ $json.impact }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -1360,
+        576
+      ],
+      "id": "515218b1-42f1-4342-90bd-f193c6d87e92",
+      "name": "Create a database page1",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "output",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -1584,
+        576
+      ],
+      "id": "454906d1-355a-4e2d-bff6-f6a3896670d1",
+      "name": "Split Out1"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "2e492ecf-c465-8042-89c1-fce7946425d9",
+          "mode": "list",
+          "cachedResultName": "Risk",
+          "cachedResultUrl": "https://www.notion.so/2e492ecfc465804289c1fce7946425d9"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Description|select",
+              "selectValue": "={{ $json.description }}"
+            },
+            {
+              "key": "Severity|select",
+              "selectValue": "={{ $json.severity }}"
+            },
+            {
+              "key": "Reference|title",
+              "title": "={{ $json.reference }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -1584,
+        768
+      ],
+      "id": "3c9e621f-3eb5-4036-9ad0-937b7395c634",
+      "name": "Create a database page2",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "risks_issues",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -1808,
+        768
+      ],
+      "id": "af49f972-df6a-4dd4-abe1-9226c0011c3a",
+      "name": "Split Out2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "722d22ba-86c0-4785-a2a9-6a705e5a886c",
+              "leftValue": "={{ $json.risks_issues }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "array",
+                "operation": "lengthNotEquals",
+                "rightType": "number"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2032,
+        768
+      ],
+      "id": "81f52855-a466-4fce-a176-c9c7d465006f",
+      "name": "If3"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "17aead1a-29ed-40fe-b8ad-2f48cd5c4671",
+              "leftValue": "={{ $json.summary_tags }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "array",
+                "operation": "lengthNotEquals",
+                "rightType": "number"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2032,
+        960
+      ],
+      "id": "f62521d5-8014-4b5e-8be0-0117df44b700",
+      "name": "If4"
+    },
+    {
+      "parameters": {
+        "jsCode": "let input = $input.first().json.summary_tags\nconst output = input.join(',')\nreturn {output}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1808,
+        960
+      ],
+      "id": "2f3e3be0-4de9-4771-bda3-f035564ba568",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Notion Trigger').item.json.id }}",
+          "__regex": "^([0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12})"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Summary|rich_text",
+              "textContent": "={{ $json.output }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -1584,
+        960
+      ],
+      "id": "ba7bb1d6-1b49-443e-b995-d9a31dfa0e3d",
+      "name": "Update a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let input = $input.first().json.decisions;\n\nlet output = input.map(item => {\n    return {\n        ...item, // keep all existing properties\n        requires_followup: item.requires_followup ? \"true\" : \"false\" // overwrite just this one\n    };\n});\n\nreturn { json: { output } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1808,
+        576
+      ],
+      "id": "6aa0639d-19e8-4f5b-bb05-f9a641a09ece",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "content": "## AI Meeting Minutes Processor",
+        "height": 896,
+        "width": 2304,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -3360,
+        320
+      ],
+      "typeVersion": 1,
+      "id": "31ee6fc3-a0e3-4a7e-8345-8b7c45c060ea",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Extract Meeting Content": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Meeting Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Parse Claude Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Create a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Claude Response1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Create a database page": {
+      "main": [
+        []
+      ]
+    },
+    "Split Out1": {
+      "main": [
+        [
+          {
+            "node": "Create a database page1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Split Out2": {
+      "main": [
+        [
+          {
+            "node": "Create a database page2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page1": {
+      "main": [
+        []
+      ]
+    },
+    "Create a database page2": {
+      "main": [
+        []
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "Split Out2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "If4": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Update a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Split Out1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1fa2c3e2-2458-4c52-b8c2-2edb565a389e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "089d9a927c0abf363ffe8a270a9573534e756390e996737e0bdd0a91a64f564e"
+  },
+  "id": "WnXEJ3c2Ugq6ttmi",
+  "tags": []
+}

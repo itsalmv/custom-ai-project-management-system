@@ -1,0 +1,667 @@
+{
+  "name": "6. VO/SI Internal Approval Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const recordType = String($input.first().json['Record Type']);\n\nif (!['VO', 'SI'].includes($input.first().json[\"Record Type\"])) {\n  return {json: {skip: true, reason: 'Not a VO or SI'}};\n}\n\nconst readyForReview = $input.first().json['Ready for Review'];\n\nif (!readyForReview) {\n  return {json: {skip: true, reason: 'Not ready for review'}};\n}\n\nconst reference = $input.first().json.Reference;\nconst subject = $input.first().json.Subject;\nconst projectId = reference.split('-')[0];\nconst impactSummary = $input.first().json['Impact Summary'] || '';\n\nreturn {\n  json: {\n    recordId: $input.first().json.id,\n    readyForReview,\n    recordType,\n    reference,\n    subject,\n    projectId,\n    impactSummary,\n    skip: false\n  }\n};"
+      },
+      "id": "9a7eb9bb-4780-4b38-bed9-18127ac0c594",
+      "name": "Validate Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -464,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.skip}}"
+            }
+          ]
+        }
+      },
+      "id": "a5485a18-0f78-4d27-9804-67744bc8eaa2",
+      "name": "Is Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const project = $input.first().json;\nconst recordData = $('Validate Record').first().json\nconst record_type = $('Validate Record').first().json.recordType\nconst projectCode = project.property_project_code;\nconst projectName = project.property_project_name;\nconst internalLead = project.property_internal_lead_email\n\nconst approvalChain = {\n  'SI': ['PM', 'Design Lead'],  // Parallel approval OK\n  'VO': ['PM', 'Design Lead', 'Commercial']  // Sequential if value > threshold\n};\n\nconst chain = approvalChain[record_type.toUpperCase()] || ['PM'];\n\n// For this implementation, we'll use sequential approval\n// You can modify to parallel by changing the workflow logic\n\nreturn {\n  json: {\n    ...recordData,\n    projectCode,\n    projectName,\n    internalLeadEmail:internalLead ,\n    internalLeadName: $input.first().json.property_internal_lead_name,\n    approvalChain: chain,\n    currentApprovalStep: 0,\n    approvedBy: []\n  }\n};"
+      },
+      "id": "de043866-17c3-43c9-b383-cb0ddb505813",
+      "name": "Determine Approval Chain",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('Determine Approval Chain').first().json;\n\n// For first approver, always send to PM (Internal Lead)\nconst currentApprover = data.approvalChain[0];\n\nconst approverEmail = data.internalLeadEmail;\nconst approverName = data.internalLeadName ;\n\n// Generate approval token for tracking\nconst approvalToken = Buffer.from(\n  JSON.stringify({\n    recordId: data.recordId,\n    approverRole: currentApprover,\n    timestamp: Date.now()\n  })\n).toString('base64');\n\nreturn {\n  json: {\n    ...data,\n    currentApprover,\n    approverEmail,\n    approverName,\n    approvalToken,\n    approveUrl: `${$env.N8N_BASE_URL || 'https://your-n8n.com'}/webhook/approval?token=${approvalToken}&action=approve`,\n    rejectUrl: `${$env.N8N_BASE_URL || 'https://your-n8n.com'}/webhook/approval?token=${approvalToken}&action=reject`,\n    changesUrl: `${$env.N8N_BASE_URL || 'https://your-n8n.com'}/webhook/approval?token=${approvalToken}&action=changes`\n  }\n};"
+      },
+      "id": "00bcf730-1f2a-40ba-b648-8de64e1c0e93",
+      "name": "Prepare Approval Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "path": "approval",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e30aa4ef-ed49-4b75-92b6-c11c29a80b24",
+      "name": "Approval Response Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -704,
+        480
+      ],
+      "webhookId": "approval-response"
+    },
+    {
+      "parameters": {
+        "jsCode": "const query = $input.first().json.query;\n\nconst token = query.token;\nconst action = query.action; // approve, reject, changes\nconst recordID = $input.first().json.query.recordID\n\nif (!token || !action) {\n  return {\n    json: {\n      error: true,\n      message: 'Invalid approval link'\n    }\n  };\n}\n\ntry {\n  const decoded = JSON.parse(Buffer.from(token, 'base64').toString());\n  \n  return {\n    json: {\n      error: false,\n      recordId: decoded.recordId,\n      approverRole: decoded.approverRole,\n      action,\n      timestamp: new Date().toISOString()\n    }\n  };\n} catch (error) {\n  return {\n    json: {\n      error: true,\n      message: 'Invalid or expired approval token'\n    }\n  };\n}"
+      },
+      "id": "0d2843cb-6004-44cd-b668-dc3b0fe7a9bd",
+      "name": "Parse Approval Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.error}}"
+            }
+          ]
+        }
+      },
+      "id": "0f63afb3-39d6-4e16-9e96-9321dd9f9567",
+      "name": "Valid Response?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -192,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html"
+              }
+            ]
+          }
+        }
+      },
+      "id": "326396bb-8dab-4584-a66b-2ae2c65774ea",
+      "name": "Show Response Page",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2224,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "databaseId": {
+          "__rl": true,
+          "value": "2e392ecf-c465-8053-802a-c406b6ba5aab",
+          "mode": "list",
+          "cachedResultName": "Project Records ",
+          "cachedResultUrl": "https://www.notion.so/2e392ecfc4658053802ac406b6ba5aab"
+        }
+      },
+      "type": "n8n-nodes-base.notionTrigger",
+      "typeVersion": 1,
+      "position": [
+        -688,
+        -144
+      ],
+      "id": "0efefe99-38ca-44ac-8a40-082535e8568a",
+      "name": "Notion Trigger",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2a092ecf-c465-80e0-a216-f60c23664dc1",
+          "mode": "list",
+          "cachedResultName": "Projects",
+          "cachedResultUrl": "https://www.notion.so/2a092ecfc46580e0a216f60c23664dc1"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Project Code|rich_text",
+              "condition": "equals",
+              "richTextValue": "={{ $json.projectId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -16,
+        -144
+      ],
+      "id": "d8106c90-2d16-4fdf-93b8-b01dd6e5b716",
+      "name": "Get many database pages",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.recordId }}",
+          "__regex": "^([0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12})"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Approvals |rich_text",
+              "textContent": "=Approval workflow initiated. Approval pending from  {{ $json.approvalChain.join(', ') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        432,
+        -144
+      ],
+      "id": "391e3d4e-ec56-48e9-8f94-4729a7c86848",
+      "name": "Update a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.approverEmail }}",
+        "subject": "=Approval Required: {{$json.recordType}} {{$json.reference}}",
+        "message": "=Approve URL: https://n8n.al-dar.com/webhook-test/approval?projectId={{ $json.projectCode }}&action=approve&email={{ $json.approverEmail }}&token={{ $json.approvalToken }}&recordID={{ $json.recordId }}\n\nReject URL: https://n8n.al-dar.com/webhook-test/approval?projectId={{ $json.projectCode }}&action=reject&email={{ $json.approverEmail }}&token={{ $json.approvalToken }}&recordID={{ $json.recordId }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        880,
+        -144
+      ],
+      "id": "43be08ab-08a1-4dc0-a74d-53b5f60cd282",
+      "name": "Send a message",
+      "webhookId": "e35e8df1-1b64-4949-b985-4388fae9ef46",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $('Parse Approval Response').item.json.recordId }}",
+          "mode": "id"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Approvals |rich_text",
+              "textContent": "=Approval received from {{ $('Valid Response?').item.json.approverRole }}."
+            },
+            {
+              "key": "Issue Date|date",
+              "date": "2026-01-10T23:05:57"
+            },
+            {
+              "key": "Approvals |rich_text",
+              "textContent": "=Approved by  {{ $json.approverRole }}."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        784,
+        320
+      ],
+      "id": "c14c278b-72b1-45e8-8b6e-80b61d4ab39c",
+      "name": "Update a database page1",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.property_internal_lead_email }}",
+        "subject": "VO/SI Issued",
+        "emailType": "text",
+        "message": "=VO issued.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1376,
+        304
+      ],
+      "id": "ed4df9ea-977a-4625-bee5-5470044c307c",
+      "name": "Send a message1",
+      "webhookId": "32e037b1-850a-4e67-ba45-903663bad8d6",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BBT3X2s2UlLmI1hr",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $('Parse Approval Response').item.json.recordId }}",
+          "mode": "id"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Status|select",
+              "selectValue": "Draft"
+            },
+            {
+              "key": "Approvals |rich_text",
+              "textContent": "=Not Approved by {{ $json.approverRole }}."
+            },
+            {
+              "key": "Closure Notes|rich_text",
+              "textContent": "=Rejected by {{ $json.approverRole }}."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        528,
+        576
+      ],
+      "id": "d2eca1af-bffa-4f87-93cb-e0c0365c875f",
+      "name": "Update a database page3",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d9991341-6b28-4d0e-a373-209a45534973",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "approve",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -32,
+        496
+      ],
+      "id": "31746f98-5e21-483e-9ef5-ac24cfa3062f",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2a092ecf-c465-80e0-a216-f60c23664dc1",
+          "mode": "list",
+          "cachedResultName": "Projects",
+          "cachedResultUrl": "https://www.notion.so/2a092ecfc46580e0a216f60c23664dc1"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Project Code|rich_text",
+              "condition": "equals",
+              "richTextValue": "={{ $json.property_project }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        1056,
+        304
+      ],
+      "id": "359725cf-1b43-4c01-a3e8-dbb15d546460",
+      "name": "Get many database pages1",
+      "credentials": {
+        "notionApi": {
+          "id": "weTJzSxXCKieQ4wY",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "##  VO/SI Internal Approval Workflow",
+        "height": 784,
+        "width": 3424,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -880,
+        256
+      ],
+      "typeVersion": 1,
+      "id": "51763ad4-fdd6-4e36-ad06-8587c3ce280f",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "##  VO/SI Internal Approval Workflow",
+        "height": 288,
+        "width": 2064,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -912,
+        -224
+      ],
+      "typeVersion": 1,
+      "id": "ddd94e88-7809-43c1-b382-b4ee43718cc9",
+      "name": "Sticky Note1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Validate Record": {
+      "main": [
+        [
+          {
+            "node": "Is Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid?": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Approval Chain": {
+      "main": [
+        [
+          {
+            "node": "Update a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Approval Request": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Response Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Approval Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Approval Response": {
+      "main": [
+        [
+          {
+            "node": "Valid Response?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Response?": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Show Response Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages": {
+      "main": [
+        [
+          {
+            "node": "Determine Approval Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a database page": {
+      "main": [
+        [
+          {
+            "node": "Prepare Approval Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a database page1": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message1": {
+      "main": [
+        [
+          {
+            "node": "Show Response Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a database page3": {
+      "main": [
+        [
+          {
+            "node": "Show Response Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Update a database page1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update a database page3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages1": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "bb510cf0-e868-448b-aa9f-93cf2fa52fc3",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "089d9a927c0abf363ffe8a270a9573534e756390e996737e0bdd0a91a64f564e"
+  },
+  "id": "KaxahglOEd6uR1QN",
+  "tags": []
+}
